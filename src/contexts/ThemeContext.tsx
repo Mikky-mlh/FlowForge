@@ -44,6 +44,9 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       if (docSnap.exists() && docSnap.data().theme) {
         setTheme({ ...defaultTheme, ...docSnap.data().theme });
       }
+    }, (error) => {
+      console.error("Theme sync error:", error);
+      // We don't throw handleFirestoreError here to avoid crashing the whole app just for theme sync failure
     });
     return unsubscribe;
   }, [syncId]);
@@ -69,7 +72,11 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const newTheme = { ...theme, ...updates };
     setTheme(newTheme);
     if (syncId) {
-      await setDoc(doc(db, 'settings', syncId), { theme: newTheme }, { merge: true });
+      try {
+        await setDoc(doc(db, 'settings', syncId), { theme: newTheme }, { merge: true });
+      } catch (error) {
+        console.error("Failed to save theme:", error);
+      }
     }
   };
 
