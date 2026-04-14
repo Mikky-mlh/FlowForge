@@ -5,7 +5,7 @@ import { CheckCircle, Clock, QrCode, SignOut, UserCircle, PaintBrush } from '@ph
 import { motion } from 'framer-motion';
 
 export const Layout: React.FC = () => {
-  const { user, logOut, syncId } = useAuth();
+  const { user, logOut, signIn, syncId } = useAuth();
 
   return (
     <div className="flex h-[100dvh] w-full bg-app-bg text-app-text font-sans overflow-hidden">
@@ -49,10 +49,15 @@ export const Layout: React.FC = () => {
               <span className="text-xs text-app-muted font-mono">{syncId}</span>
             </div>
           </div>
-          {user && (
+          {user ? (
             <button onClick={logOut} className="flex items-center gap-3 px-4 py-2 w-full text-app-muted hover:text-red-600 transition-colors rounded-lg hover:bg-app-surface">
               <SignOut className="w-4 h-4" />
               <span className="text-sm font-medium">Sign Out</span>
+            </button>
+          ) : (
+            <button onClick={signIn} className="flex items-center gap-3 px-4 py-2 w-full text-app-muted hover:text-app-primary transition-colors rounded-lg hover:bg-app-surface">
+              <UserCircle className="w-4 h-4" />
+              <span className="text-sm font-medium">Sign In</span>
             </button>
           )}
         </div>

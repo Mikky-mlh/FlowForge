@@ -46,13 +46,50 @@ export const LinkDevice: React.FC = () => {
           <div className="flex-grow border-t border-app-border"></div>
         </div>
 
-        <button
-          onClick={() => setMode('scan')}
-          className="w-full flex items-center justify-center gap-3 bg-app-card text-app-text px-6 py-4 rounded-xl font-medium hover:bg-app-surface transition-colors border border-app-border"
-        >
-          <Scan className="w-5 h-5" />
-          Scan QR Code
-        </button>
+        {mode === 'scan' ? (
+          <div className="w-full space-y-4">
+            <div className="w-full aspect-square bg-app-surface rounded-2xl overflow-hidden border border-app-border">
+              <QrReader
+                onResult={handleScan}
+                constraints={{ facingMode: 'environment' }}
+                className="w-full h-full object-cover"
+              />
+            </div>
+            <button
+              onClick={() => setMode('show')}
+              className="text-sm text-app-muted hover:text-app-text"
+            >
+              Cancel Scan
+            </button>
+          </div>
+        ) : (
+          <div className="w-full space-y-4">
+            <button
+              onClick={() => setMode('scan')}
+              className="w-full flex items-center justify-center gap-3 bg-app-card text-app-text px-6 py-4 rounded-xl font-medium hover:bg-app-surface transition-colors border border-app-border"
+            >
+              <Scan className="w-5 h-5" />
+              Scan QR Code
+            </button>
+            <form onSubmit={handleManualLink} className="w-full flex gap-2">
+              <input
+                type="text"
+                value={manualCode}
+                onChange={(e) => setManualCode(e.target.value.toUpperCase())}
+                placeholder="12-CHAR-CODE"
+                maxLength={12}
+                className="flex-1 bg-app-card border border-app-border rounded-xl px-4 py-3 text-app-text font-mono focus:border-app-primary outline-none transition-colors"
+              />
+              <button
+                type="submit"
+                disabled={manualCode.length !== 12}
+                className="px-6 bg-app-primary text-app-primary-fg rounded-xl font-medium disabled:opacity-50"
+              >
+                Link
+              </button>
+            </form>
+          </div>
+        )}
       </div>
     );
   }
