@@ -10,8 +10,8 @@ export const db = getFirestore(app);
 export const storage = getStorage(app);
 export const googleProvider = new GoogleAuthProvider();
 
-// Add calendar scope for sync
-googleProvider.addScope('https://www.googleapis.com/auth/calendar.events');
+// Temporarily disabled to test login
+// googleProvider.addScope('https://www.googleapis.com/auth/calendar.events');
 
 // Enable offline persistence
 enableIndexedDbPersistence(db).catch((err) => {
