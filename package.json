@@ -17,6 +17,7 @@
     "@tiptap/react": "^3.22.3",
     "@tiptap/starter-kit": "^3.22.3",
     "@vitejs/plugin-react": "^5.0.4",
+    "@yudiel/react-qr-scanner": "^2.5.1",
     "chrono-node": "^2.9.0",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
