@@ -3,6 +3,7 @@ import { User, signInWithPopup, signOut, onAuthStateChanged } from 'firebase/aut
 import { auth, googleProvider, db } from '../firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { v4 as uuidv4 } from 'uuid';
+import { handleFirestoreError, OperationType } from '../lib/firestore-errors';
 
 interface AuthContextType {
   user: User | null;
@@ -25,13 +26,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(currentUser);
       if (currentUser) {
         // Fetch or create syncId
-        const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
-        if (userDoc.exists()) {
-          setSyncId(userDoc.data().syncId);
-        } else {
-          const newSyncId = uuidv4().substring(0, 12).toUpperCase();
-          await setDoc(doc(db, 'users', currentUser.uid), { syncId: newSyncId });
-          setSyncId(newSyncId);
+        try {
+          const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+          if (userDoc.exists()) {
+            setSyncId(userDoc.data().syncId);
+          } else {
+            const newSyncId = uuidv4().substring(0, 12).toUpperCase();
+            await setDoc(doc(db, 'users', currentUser.uid), { syncId: newSyncId });
+            setSyncId(newSyncId);
+          }
+        } catch (error) {
+          handleFirestoreError(error, OperationType.GET, `users/${currentUser.uid}`);
         }
       } else {
         // Check local storage for linked device syncId

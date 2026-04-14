@@ -1,12 +1,80 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allow read/write for tasks if the syncId matches
-    match /tasks/{taskId} {
-      allow read, write: if true; // In a real app, secure this with auth or syncId validation
+
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    // Collection: users
+    // Document ID: Firebase Auth UID
+    // Fields:
+    //   - syncId: string (required, max 20 chars)
+    //
+    // Collection: tasks
+    // Document ID: UUID
+    // Fields:
+    //   - id: string (required)
+    //   - title: string (required, max 200 chars)
+    //   - description: string (optional, max 2000 chars)
+    //   - priority: string ('low', 'medium', 'high')
+    //   - status: string ('todo', 'in-progress', 'done')
+    //   - tags: list of strings (max 20 items)
+    //   - dueDate: string (optional)
+    //   - syncId: string (required, max 20 chars)
+    //   - createdAt: number (required)
+    //   - subtasks: list of objects (optional)
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
     }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasOnly(['syncId']) &&
+             data.syncId is string &&
+             data.syncId.size() > 0 &&
+             data.syncId.size() <= 20;
+    }
+
+    function isValidTask(data) {
+      let hasRequired = data.keys().hasAll(['id', 'title', 'priority', 'status', 'syncId', 'createdAt']);
+      let hasValidTypes = data.id is string &&
+                          data.title is string && data.title.size() > 0 && data.title.size() <= 200 &&
+                          data.priority in ['low', 'medium', 'high'] &&
+                          data.status in ['todo', 'in-progress', 'done'] &&
+                          data.syncId is string && data.syncId.size() > 0 && data.syncId.size() <= 20 &&
+                          data.createdAt is number;
+      
+      let validDesc = !('description' in data) || (data.description is string && data.description.size() <= 2000);
+      let validDueDate = !('dueDate' in data) || (data.dueDate is string && data.dueDate.size() <= 50);
+      let validTags = !('tags' in data) || (data.tags is list && data.tags.size() <= 20);
+      let validSubtasks = !('subtasks' in data) || (data.subtasks is list && data.subtasks.size() <= 50);
+
+      return hasRequired && hasValidTypes && validDesc && validDueDate && validTags && validSubtasks;
+    }
+
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidUser(request.resource.data);
+      allow update: if isOwner(userId) && isValidUser(request.resource.data);
+      allow delete: if isOwner(userId);
+    }
+
+    match /tasks/{taskId} {
+      // Allow read if the document has a syncId. 
+      // This allows unauthenticated devices to sync if they know the exact syncId to query.
+      allow read: if resource.data.syncId is string;
+      
+      allow create: if isValidTask(request.resource.data);
+      
+      allow update: if isValidTask(request.resource.data) && 
+                       resource.data.syncId == request.resource.data.syncId;
+                       
+      allow delete: if resource.data.syncId is string;
     }
   }
 }
