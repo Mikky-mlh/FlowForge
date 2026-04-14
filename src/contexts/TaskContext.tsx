@@ -3,6 +3,7 @@ import { collection, query, where, onSnapshot, doc, setDoc, deleteDoc, updateDoc
 import { db } from '../firebase';
 import { useAuth } from './AuthContext';
 import { addToSyncQueue, getSyncQueue, removeFromSyncQueue } from '../lib/idb';
+import { handleFirestoreError, OperationType } from '../lib/firestore-errors';
 
 export interface Subtask {
   id: string;
@@ -85,7 +86,7 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
       setTasks(tasksData.sort((a, b) => b.createdAt - a.createdAt));
     }, (error) => {
-      console.error("Error fetching tasks:", error);
+      handleFirestoreError(error, OperationType.LIST, 'tasks');
     });
 
     return unsubscribe;
@@ -107,6 +108,7 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         await setDoc(doc(db, 'tasks', newTask.id), newTask);
       } catch (e) {
+        handleFirestoreError(e, OperationType.CREATE, `tasks/${newTask.id}`);
         await addToSyncQueue('ADD', 'tasks', newTask);
       }
     } else {
@@ -121,6 +123,7 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         await updateDoc(doc(db, 'tasks', id), updates);
       } catch (e) {
+        handleFirestoreError(e, OperationType.UPDATE, `tasks/${id}`);
         await addToSyncQueue('UPDATE', 'tasks', { id, ...updates });
       }
     } else {
@@ -135,6 +138,7 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         await deleteDoc(doc(db, 'tasks', id));
       } catch (e) {
+        handleFirestoreError(e, OperationType.DELETE, `tasks/${id}`);
         await addToSyncQueue('DELETE', 'tasks', { id });
       }
     } else {

@@ -1,0 +1,41 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile containing sync information",
+      "type": "object",
+      "properties": {
+        "syncId": { "type": "string" }
+      },
+      "required": ["syncId"]
+    },
+    "Task": {
+      "title": "Task",
+      "description": "A task item",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "priority": { "type": "string" },
+        "status": { "type": "string" },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "dueDate": { "type": "string" },
+        "syncId": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "subtasks": { "type": "array" }
+      },
+      "required": ["id", "title", "priority", "status", "syncId", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "User documents"
+    },
+    "/tasks/{taskId}": {
+      "schema": { "$ref": "#/entities/Task" },
+      "description": "Task documents"
+    }
+  }
+}

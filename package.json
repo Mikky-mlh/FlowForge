@@ -31,7 +31,7 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-qr-code": "^2.0.18",
-    "@yudiel/react-qr-scanner": "^2.0.14",
+    "react-qr-reader": "^3.0.0-beta-1",
     "react-router-dom": "^7.14.1",
     "tailwind-merge": "^3.5.0",
     "uuid": "^13.0.0",

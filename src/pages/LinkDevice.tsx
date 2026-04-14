@@ -6,7 +6,7 @@ import { motion } from 'framer-motion';
 import { QrCode, Scan, GoogleLogo } from '@phosphor-icons/react';
 
 export const LinkDevice: React.FC = () => {
-  const { user, syncId, signIn, linkDevice } = useAuth();
+  const { user, syncId, signIn, linkDevice, error: authError } = useAuth();
   const [mode, setMode] = useState<'show' | 'scan'>('show');
   const [manualCode, setManualCode] = useState('');
 
@@ -30,8 +30,30 @@ export const LinkDevice: React.FC = () => {
           <QrCode className="w-8 h-8" />
         </div>
         <h1 className="text-3xl font-medium tracking-tighter mb-4 text-app-text">Sync Devices</h1>
-        <p className="text-app-muted mb-12">Sign in with Google to create your master sync ID, or scan a code from an existing device.</p>
+        <p className="text-app-muted mb-8">Sign in with Google to create your master sync ID, or scan a code from an existing device.</p>
         
+        {authError && (
+          <div className="w-full bg-red-500/10 border border-red-500/20 text-red-500 p-4 rounded-xl mb-8 text-sm text-left">
+            <p className="font-bold mb-1">Sign-in Error:</p>
+            <p>{authError}</p>
+            {authError.includes('auth/unauthorized-domain') && (
+              <p className="mt-2 text-xs">
+                <strong>Fix:</strong> Go to Firebase Console &gt; Authentication &gt; Settings &gt; Authorized domains, and add this app's URL.
+              </p>
+            )}
+            {authError.includes('auth/invalid-api-key') && (
+              <p className="mt-2 text-xs">
+                <strong>Fix:</strong> Check your firebase-applet-config.json. The API key is invalid.
+              </p>
+            )}
+            {authError.includes('auth/popup-closed-by-user') && (
+              <p className="mt-2 text-xs">
+                The popup was closed before completing sign in. Please try again.
+              </p>
+            )}
+          </div>
+        )}
+
         <button
           onClick={signIn}
           className="w-full flex items-center justify-center gap-3 bg-app-text text-app-bg px-6 py-4 rounded-xl font-medium hover:opacity-90 transition-colors mb-4"

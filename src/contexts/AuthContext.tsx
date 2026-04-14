@@ -3,11 +3,13 @@ import { User, signInWithPopup, signOut, onAuthStateChanged } from 'firebase/aut
 import { auth, googleProvider, db } from '../firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { v4 as uuidv4 } from 'uuid';
+import { handleFirestoreError, OperationType } from '../lib/firestore-errors';
 
 interface AuthContextType {
   user: User | null;
   syncId: string | null;
   loading: boolean;
+  error: string | null;
   signIn: () => Promise<void>;
   logOut: () => Promise<void>;
   linkDevice: (code: string) => Promise<boolean>;
@@ -19,19 +21,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [syncId, setSyncId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
         // Fetch or create syncId
-        const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
-        if (userDoc.exists()) {
-          setSyncId(userDoc.data().syncId);
-        } else {
-          const newSyncId = uuidv4().substring(0, 12).toUpperCase();
-          await setDoc(doc(db, 'users', currentUser.uid), { syncId: newSyncId });
-          setSyncId(newSyncId);
+        try {
+          const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+          if (userDoc.exists()) {
+            setSyncId(userDoc.data().syncId);
+          } else {
+            const newSyncId = uuidv4().substring(0, 12).toUpperCase();
+            await setDoc(doc(db, 'users', currentUser.uid), { syncId: newSyncId });
+            setSyncId(newSyncId);
+          }
+        } catch (error) {
+          handleFirestoreError(error, OperationType.GET, `users/${currentUser.uid}`);
         }
       } else {
         // Check local storage for linked device syncId
@@ -48,10 +55,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const signIn = async () => {
+    setError(null);
     try {
       await signInWithPopup(auth, googleProvider);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error signing in', error);
+      setError(error.message || 'Failed to sign in with Google');
     }
   };
 
@@ -69,7 +78,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, syncId, loading, signIn, logOut, linkDevice }}>
+    <AuthContext.Provider value={{ user, syncId, loading, error, signIn, logOut, linkDevice }}>
       {children}
     </AuthContext.Provider>
   );
