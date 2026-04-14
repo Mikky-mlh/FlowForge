@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { QRCodeSVG } from 'qrcode.react';
-import { QrReader } from 'react-qr-reader';
+import { QrScanner } from '@yudiel/react-qr-scanner';
 import { motion } from 'framer-motion';
 import { QrCode, Scan, GoogleLogo } from '@phosphor-icons/react';
 
@@ -10,10 +10,8 @@ export const LinkDevice: React.FC = () => {
   const [mode, setMode] = useState<'show' | 'scan'>('show');
   const [manualCode, setManualCode] = useState('');
 
-  const handleScan = (result: any, error: any) => {
-    if (result?.text) {
-      linkDevice(result.text);
-    }
+  const handleScan = (result: string) => {
+    linkDevice(result);
   };
 
   const handleManualLink = (e: React.FormEvent) => {
@@ -71,10 +69,9 @@ export const LinkDevice: React.FC = () => {
         {mode === 'scan' ? (
           <div className="w-full space-y-4">
             <div className="w-full aspect-square bg-app-surface rounded-2xl overflow-hidden border border-app-border">
-              <QrReader
-                onResult={handleScan}
-                constraints={{ facingMode: 'environment' }}
-                className="w-full h-full object-cover"
+              <QrScanner
+                onDecode={handleScan}
+                onError={(error) => console.log(error?.message)}
               />
             </div>
             <button
@@ -141,10 +138,9 @@ export const LinkDevice: React.FC = () => {
           <div className="w-full space-y-6">
             {mode === 'scan' ? (
               <div className="w-full aspect-square bg-app-surface rounded-2xl overflow-hidden border border-app-border">
-                <QrReader
-                  onResult={handleScan}
-                  constraints={{ facingMode: 'environment' }}
-                  className="w-full h-full object-cover"
+                <QrScanner
+                  onDecode={handleScan}
+                  onError={(error) => console.log(error?.message)}
                 />
               </div>
             ) : (
