@@ -6,18 +6,29 @@ import { motion } from 'framer-motion';
 import { QrCode, Scan, GoogleLogo } from '@phosphor-icons/react';
 
 export const LinkDevice: React.FC = () => {
-  const { user, syncId, signIn, linkDevice, error: authError } = useAuth();
+  const { user, syncId, signIn, linkDevice, error: authError, deviceLinkError, deviceLinkLoading } = useAuth();
   const [mode, setMode] = useState<'show' | 'scan'>('show');
   const [manualCode, setManualCode] = useState('');
+  const [linkError, setLinkError] = useState<string | null>(null);
 
-  const handleScan = (result: string) => {
-    linkDevice(result);
+  const handleScan = async (result: string) => {
+    try {
+      setLinkError(null);
+      await linkDevice(result);
+    } catch (e: any) {
+      setLinkError(e.message);
+    }
   };
 
-  const handleManualLink = (e: React.FormEvent) => {
+  const handleManualLink = async (e: React.FormEvent) => {
     e.preventDefault();
     if (manualCode.length === 12) {
-      linkDevice(manualCode);
+      try {
+        setLinkError(null);
+        await linkDevice(manualCode);
+      } catch (err: any) {
+        setLinkError(err.message);
+      }
     }
   };
 
@@ -49,6 +60,12 @@ export const LinkDevice: React.FC = () => {
                 The popup was closed before completing sign in. Please try again.
               </p>
             )}
+          </div>
+        )}
+
+        {linkError && (
+          <div className="w-full bg-red-500/10 border border-red-500/20 text-red-500 p-4 rounded-xl mb-6 text-sm">
+            {linkError}
           </div>
         )}
 
@@ -105,10 +122,10 @@ export const LinkDevice: React.FC = () => {
               />
               <button
                 type="submit"
-                disabled={manualCode.length !== 12}
+                disabled={manualCode.length !== 12 || deviceLinkLoading}
                 className="px-6 bg-app-primary text-app-primary-fg rounded-xl font-medium disabled:opacity-50"
               >
-                Link
+                {deviceLinkLoading ? 'Verifying...' : 'Link'}
               </button>
             </form>
           </div>

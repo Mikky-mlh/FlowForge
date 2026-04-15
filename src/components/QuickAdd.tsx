@@ -4,11 +4,11 @@ import { useTasks } from '../contexts/TaskContext';
 import { useAuth } from '../contexts/AuthContext';
 import { PaperPlaneRight } from '@phosphor-icons/react';
 import { motion } from 'framer-motion';
-import { syncTaskToCalendar } from '../lib/googleApi';
+import { sanitizeTitle, sanitizeTags } from '../lib/sanitize';
 
 export const QuickAdd: React.FC = () => {
   const [input, setInput] = useState('');
-  const { addTask, updateTask } = useTasks();
+  const { addTask } = useTasks();
   const { googleAccessToken } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -19,6 +19,7 @@ export const QuickAdd: React.FC = () => {
     let dueDate = undefined;
     let duration = undefined;
     let title = input;
+    let category: string | undefined;
 
     if (parsed.length > 0) {
       dueDate = parsed[0].start.date().toISOString();
@@ -45,24 +46,59 @@ export const QuickAdd: React.FC = () => {
       title = title.replace('!medium', '').trim();
     }
 
+    // Parse category (@categoryName)
+    const categoryMatch = title.match(/@(\w+)/);
+    if (categoryMatch) {
+      category = categoryMatch[1].toLowerCase();
+      title = title.replace(/@\w+/, '').trim();
+    }
+
+    // Parse recurring (!!daily, !!weekly, !!monthly)
+    let recurring: boolean = false;
+    let recurrenceRule: 'daily' | 'weekly' | 'monthly' | undefined;
+    if (title.includes('!!monthly')) {
+      recurring = true;
+      recurrenceRule = 'monthly';
+      title = title.replace('!!monthly', '').trim();
+    } else if (title.includes('!!weekly')) {
+      recurring = true;
+      recurrenceRule = 'weekly';
+      title = title.replace('!!weekly', '').trim();
+    } else if (title.includes('!!daily')) {
+      recurring = true;
+      recurrenceRule = 'daily';
+      title = title.replace('!!daily', '').trim();
+    }
+
     // Clean up extra spaces
     title = title.replace(/\s+/g, ' ').trim();
 
-    const newTask = await addTask({
-      title,
+    // If title is empty after parsing, use original input as fallback
+    if (!title || title.length === 0) {
+      title = input.trim();
+    }
+
+    // If still empty after fallback, show error
+    if (!title || title.length === 0) {
+      return;
+    }
+
+    // Sanitize inputs for security
+    const sanitizedTitle = sanitizeTitle(title);
+    const sanitizedTags = sanitizeTags(tags);
+    const sanitizedCategory = category ? sanitizeTitle(category).toLowerCase().replace(/[^a-z0-9]/g, '') : undefined;
+
+    await addTask({
+      title: sanitizedTitle,
       priority,
       status: 'todo',
-      tags,
+      tags: sanitizedTags,
+      category: sanitizedCategory,
       dueDate,
       duration,
+      recurring,
+      recurrenceRule,
     });
-
-    if (newTask && dueDate && googleAccessToken) {
-      const eventId = await syncTaskToCalendar(newTask, googleAccessToken);
-      if (eventId) {
-        updateTask(newTask.id, { calendarEventId: eventId });
-      }
-    }
 
     setInput('');
   };
@@ -75,7 +111,7 @@ export const QuickAdd: React.FC = () => {
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Add task tomorrow 5pm #shopping !high..."
+          placeholder="Add task tomorrow 5pm #shopping !high @work !!daily..."
           className="flex-1 bg-transparent border-none outline-none text-[15px] text-app-text placeholder:text-app-muted/80"
         />
         <motion.button

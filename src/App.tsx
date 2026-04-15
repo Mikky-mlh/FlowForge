@@ -8,6 +8,7 @@ import { Dashboard } from './pages/Dashboard';
 import { LinkDevice } from './pages/LinkDevice';
 import { PomodoroTimer } from './components/PomodoroTimer';
 import { Settings } from './pages/Settings';
+import { ToastProvider } from './components/ToastProvider';
 
 const RequireAuth: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, syncId, loading } = useAuth();
@@ -28,22 +29,24 @@ const RequireAuth: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 function App() {
   return (
     <BrowserRouter>
-      <AuthProvider>
-        <ThemeProvider>
-          <TaskProvider>
-            <RequireAuth>
-              <Routes>
-                <Route path="/" element={<Layout />}>
-                  <Route index element={<Dashboard />} />
-                  <Route path="timer" element={<PomodoroTimer />} />
-                  <Route path="link" element={<LinkDevice />} />
-                  <Route path="settings" element={<Settings />} />
-                </Route>
-              </Routes>
-            </RequireAuth>
-          </TaskProvider>
-        </ThemeProvider>
-      </AuthProvider>
+      <ToastProvider>
+        <AuthProvider>
+          <ThemeProvider>
+            <TaskProvider>
+              <RequireAuth>
+                <Routes>
+                  <Route path="/" element={<Layout />}>
+                    <Route index element={<Dashboard />} />
+                    <Route path="timer" element={<PomodoroTimer />} />
+                    <Route path="link" element={<LinkDevice />} />
+                    <Route path="settings" element={<Settings />} />
+                  </Route>
+                </Routes>
+              </RequireAuth>
+            </TaskProvider>
+          </ThemeProvider>
+        </AuthProvider>
+      </ToastProvider>
     </BrowserRouter>
   );
 }

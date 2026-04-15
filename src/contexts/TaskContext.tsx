@@ -3,7 +3,6 @@ import { collection, query, where, onSnapshot, doc, setDoc, deleteDoc, updateDoc
 import { db } from '../firebase';
 import { useAuth } from './AuthContext';
 import { addToSyncQueue, getSyncQueue, removeFromSyncQueue } from '../lib/idb';
-import { handleFirestoreError, OperationType } from '../lib/firestore-errors';
 
 export interface Subtask {
   id: string;
@@ -18,15 +17,21 @@ export interface Task {
   priority: 'low' | 'medium' | 'high';
   status: 'todo' | 'in-progress' | 'done';
   tags: string[];
+  category?: string;
   dueDate?: string;
-  duration?: number; // in minutes
+  duration?: number;
   syncId: string;
   createdAt: number;
+  completedAt?: number;
+  lastModified?: number;
   subtasks?: Subtask[];
   dependentTaskId?: string;
   calendarEventId?: string;
   googleTaskId?: string;
   googleTaskListId?: string;
+  recurring?: boolean;
+  recurrenceRule?: 'daily' | 'weekly' | 'monthly';
+  recurrenceEnd?: number;
 }
 
 interface TaskContextType {
@@ -67,9 +72,11 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
             } else if (item.action === 'DELETE') {
               await deleteDoc(doc(db, item.collection, item.data.id));
             }
+            // Only remove from queue AFTER successful sync
             await removeFromSyncQueue(item.id);
           } catch (e) {
             console.error('Failed to sync item', e);
+            // Keep in queue for retry
           }
         }
       };
@@ -91,19 +98,21 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
       setTasks(tasksData.sort((a, b) => b.createdAt - a.createdAt));
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'tasks');
+      console.error('Firestore listen error:', error);
     });
 
     return unsubscribe;
   }, [syncId]);
 
-  const addTask = async (taskData: Omit<Task, 'id' | 'syncId' | 'createdAt'>) => {
+  const addTask = async (taskData: Omit<Task, 'id' | 'syncId' | 'createdAt' | 'lastModified'>) => {
     if (!syncId) return;
+    const now = Date.now();
     const newTask: Task = {
       ...taskData,
       id: crypto.randomUUID(),
       syncId,
-      createdAt: Date.now(),
+      createdAt: now,
+      lastModified: now,
     };
 
     // Optimistic update
@@ -113,7 +122,7 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         await setDoc(doc(db, 'tasks', newTask.id), newTask);
       } catch (e) {
-        handleFirestoreError(e, OperationType.CREATE, `tasks/${newTask.id}`);
+        console.error('Failed to create task', e);
         await addToSyncQueue('ADD', 'tasks', newTask);
       }
     } else {
@@ -122,18 +131,67 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const updateTask = async (id: string, updates: Partial<Task>) => {
-    setTasks(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
+    // Add completedAt and lastModified timestamps
+    const now = Date.now();
+    const finalUpdates = updates.status === 'done' 
+      ? { ...updates, completedAt: now, lastModified: now }
+      : { ...updates, lastModified: now };
+    
+    const currentTask = tasks.find(t => t.id === id);
+    const isCompletingRecurring = currentTask?.status !== 'done' && updates.status === 'done' && currentTask?.recurring;
+    
+    setTasks(prev => prev.map(t => t.id === id ? { ...t, ...finalUpdates } : t));
     
     if (isOnline) {
       try {
-        await updateDoc(doc(db, 'tasks', id), updates);
+        await updateDoc(doc(db, 'tasks', id), finalUpdates);
+        
+        // If completing a recurring task, create the next instance
+        if (isCompletingRecurring && currentTask) {
+          const nextDueDate = getNextRecurrenceDate(currentTask.dueDate, currentTask.recurrenceRule!);
+          if (nextDueDate && (!currentTask.recurrenceEnd || nextDueDate < currentTask.recurrenceEnd)) {
+            const nextTask: Task = {
+              ...currentTask,
+              id: crypto.randomUUID(),
+              status: 'todo',
+              dueDate: nextDueDate.toISOString(),
+              completedAt: undefined,
+              createdAt: now,
+              lastModified: now,
+              parentTaskId: id,
+            };
+            await setDoc(doc(db, 'tasks', nextTask.id), nextTask);
+            setTasks(prev => [nextTask, ...prev]);
+          }
+        }
       } catch (e) {
-        handleFirestoreError(e, OperationType.UPDATE, `tasks/${id}`);
-        await addToSyncQueue('UPDATE', 'tasks', { id, ...updates });
+        console.error('Failed to update task', e);
+        await addToSyncQueue('UPDATE', 'tasks', { id, ...finalUpdates });
       }
     } else {
-      await addToSyncQueue('UPDATE', 'tasks', { id, ...updates });
+      await addToSyncQueue('UPDATE', 'tasks', { id, ...finalUpdates });
     }
+  };
+
+  const getNextRecurrenceDate = (currentDueDate: string | undefined, rule: 'daily' | 'weekly' | 'monthly'): Date | null => {
+    if (!currentDueDate) return null;
+    
+    const date = new Date(currentDueDate);
+    const now = new Date();
+    
+    switch (rule) {
+      case 'daily':
+        date.setDate(date.getDate() + 1);
+        break;
+      case 'weekly':
+        date.setDate(date.getDate() + 7);
+        break;
+      case 'monthly':
+        date.setMonth(date.getMonth() + 1);
+        break;
+    }
+    
+    return date > now ? date : null;
   };
 
   const deleteTask = async (id: string) => {
@@ -143,7 +201,7 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         await deleteDoc(doc(db, 'tasks', id));
       } catch (e) {
-        handleFirestoreError(e, OperationType.DELETE, `tasks/${id}`);
+        console.error('Failed to delete task', e);
         await addToSyncQueue('DELETE', 'tasks', { id });
       }
     } else {

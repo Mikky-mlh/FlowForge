@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { QuickAdd } from '../components/QuickAdd';
 import { TaskDetailModal } from '../components/TaskDetailModal';
 import { motion, AnimatePresence } from 'framer-motion';
-import { CheckCircle, Circle, CalendarBlank, Tag, MagnifyingGlass, SortAscending, Funnel, CalendarPlus, List, Clock, DownloadSimple } from '@phosphor-icons/react';
+import { CheckCircle, Circle, CalendarBlank, Tag, MagnifyingGlass, SortAscending, Funnel, CalendarPlus, List, Clock, DownloadSimple, Square, CheckSquare } from '@phosphor-icons/react';
 import { format, isSameDay } from 'date-fns';
 import { fetchGoogleTasks, fetchGoogleCalendarEvents, syncTaskToCalendar, syncTaskToGoogleTask } from '../lib/googleApi';
 
@@ -28,7 +28,7 @@ const getTagColor = (tag: string) => {
 };
 
 export const Dashboard: React.FC = () => {
-  const { tasks, updateTask, addTask, isOnline } = useTasks();
+  const { tasks, updateTask, deleteTask, addTask, isOnline } = useTasks();
   const { syncId, googleAccessToken, signIn } = useAuth();
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -37,12 +37,23 @@ export const Dashboard: React.FC = () => {
   
   const [searchQuery, setSearchQuery] = useState('');
   const [filterTag, setFilterTag] = useState<string | null>(null);
+  const [filterCategory, setFilterCategory] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<'createdAt' | 'dueDate' | 'priority'>('createdAt');
+  
+  // Bulk selection
+  const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set());
+  const [showBulkActions, setShowBulkActions] = useState(false);
 
   const allTags = useMemo(() => {
     const tags = new Set<string>();
     tasks.forEach(t => t.tags?.forEach(tag => tags.add(tag)));
     return Array.from(tags);
+  }, [tasks]);
+
+  const allCategories = useMemo(() => {
+    const categories = new Set<string>();
+    tasks.forEach(t => t.category && categories.add(t.category));
+    return Array.from(categories);
   }, [tasks]);
 
   const filteredAndSortedTasks = useMemo(() => {
@@ -58,6 +69,10 @@ export const Dashboard: React.FC = () => {
 
     if (filterTag) {
       result = result.filter(t => t.tags?.includes(filterTag));
+    }
+
+    if (filterCategory) {
+      result = result.filter(t => t.category === filterCategory);
     }
 
     result.sort((a, b) => {
@@ -77,11 +92,33 @@ export const Dashboard: React.FC = () => {
     });
 
     return result;
-  }, [tasks, searchQuery, filterTag, sortBy]);
+  }, [tasks, searchQuery, filterTag, filterCategory, sortBy]);
 
   const incompleteTasks = filteredAndSortedTasks.filter(t => t.status !== 'done');
   const completedTasks = filteredAndSortedTasks.filter(t => t.status === 'done');
   const selectedTask = tasks.find(t => t.id === selectedTaskId);
+
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const todayEnd = new Date();
+  todayEnd.setHours(23, 59, 59, 999);
+
+  const todayMetrics = useMemo(() => {
+    const tasksWithDueDate = tasks.filter(t => t.dueDate && new Date(t.dueDate) >= todayStart && new Date(t.dueDate) <= todayEnd);
+    const completedToday = tasks.filter(t => t.status === 'done' && t.completedAt && t.completedAt >= todayStart.getTime() && t.completedAt <= todayEnd.getTime());
+    
+    const score = tasksWithDueDate.length > 0 
+      ? Math.round((completedToday.length / tasksWithDueDate.length) * 100) 
+      : tasks.length > 0 ? Math.round((completedToday.length / tasks.length) * 100) : 0;
+    
+    return {
+      completedToday: completedToday.length,
+      tasksWithDueDate: tasksWithDueDate.length,
+      totalTasks: tasks.length,
+      score,
+      completedAllTime: tasks.filter(t => t.status === 'done').length
+    };
+  }, [tasks]);
 
   const handleCalendarSync = async () => {
     let token = googleAccessToken;
@@ -161,7 +198,11 @@ export const Dashboard: React.FC = () => {
     try {
       let importedCount = 0;
       if (source === 'tasks') {
-        const gTasks = await fetchGoogleTasks(token);
+        const { tasks: gTasks, taskListId } = await fetchGoogleTasks(token);
+        if (!taskListId) {
+          alert('No Google Tasks list found');
+          return;
+        }
         for (const gt of gTasks) {
           // Check if we already have it (basic check by title)
           if (!tasks.some(t => t.title === gt.title)) {
@@ -173,7 +214,7 @@ export const Dashboard: React.FC = () => {
               tags: ['imported', 'google-tasks'],
               dueDate: gt.due ? new Date(gt.due).toISOString() : undefined,
               googleTaskId: gt.id,
-              googleTaskListId: defaultList.id,
+              googleTaskListId: taskListId,
             });
             importedCount++;
           }
@@ -225,7 +266,11 @@ export const Dashboard: React.FC = () => {
           <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.05em] text-app-muted">
             <div className={`w-2 h-2 rounded-full ${isOnline ? 'bg-app-primary' : 'bg-amber-500'}`} />
             <span>{isOnline ? 'Synced:' : 'Offline Mode'}</span>
-            {isOnline && <span className="text-app-primary font-mono">{syncId || 'WOLF-4821-BLUE'}</span>}
+            {isOnline && (
+              syncId 
+                ? <span className="text-app-primary font-mono">{syncId}</span>
+                : <span className="text-app-muted">Not linked</span>
+            )}
           </div>
         </div>
         <div className="text-right hidden md:flex flex-col items-end gap-2">
@@ -272,6 +317,17 @@ export const Dashboard: React.FC = () => {
           >
             <Clock className="w-4 h-4" /> Timeline
           </button>
+          <button 
+            onClick={() => {
+              if (showBulkActions) {
+                setSelectedTasks(new Set());
+              }
+              setShowBulkActions(!showBulkActions);
+            }}
+            className={`px-4 py-1.5 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors ${showBulkActions ? 'bg-app-primary text-app-primary-fg' : 'text-app-muted hover:text-app-text'}`}
+          >
+            {showBulkActions ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />} Bulk
+          </button>
         </div>
 
         <div className="flex-1 min-w-[200px] relative">
@@ -313,7 +369,57 @@ export const Dashboard: React.FC = () => {
             </select>
           </div>
         )}
+
+        {allCategories.length > 0 && (
+          <div className="flex items-center gap-2">
+            <Funnel className="w-4 h-4 text-app-muted" />
+            <select 
+              value={filterCategory || ''}
+              onChange={e => setFilterCategory(e.target.value || null)}
+              className="bg-app-card border border-app-border rounded-xl px-3 py-2 text-sm text-app-text focus:border-app-primary outline-none transition-colors max-w-[150px]"
+            >
+              <option value="">All Categories</option>
+              {allCategories.map(cat => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
+
+      {selectedTasks.size > 0 && (
+        <div className="mb-4 flex items-center gap-4 p-4 bg-app-primary/10 border border-app-primary/20 rounded-xl">
+          <span className="text-sm font-medium text-app-primary">{selectedTasks.size} selected</span>
+          <button 
+            onClick={async () => {
+              for (const id of selectedTasks) {
+                await updateTask(id, { status: 'done' });
+              }
+              setSelectedTasks(new Set());
+            }}
+            className="px-3 py-1 text-sm bg-app-primary text-app-primary-fg rounded-lg"
+          >
+            Complete
+          </button>
+          <button 
+            onClick={async () => {
+              for (const id of selectedTasks) {
+                await deleteTask(id);
+              }
+              setSelectedTasks(new Set());
+            }}
+            className="px-3 py-1 text-sm bg-red-500 text-white rounded-lg"
+          >
+            Delete
+          </button>
+          <button 
+            onClick={() => setSelectedTasks(new Set())}
+            className="px-3 py-1 text-sm text-app-muted"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-[1.6fr_1fr] gap-12">
         <div className="space-y-12">
@@ -373,7 +479,14 @@ export const Dashboard: React.FC = () => {
                               if (task.googleTaskId) syncTaskToGoogleTask(updatedTask, googleAccessToken);
                             }
                           }} 
-                          onClick={() => setSelectedTaskId(task.id)} 
+                          onClick={() => setSelectedTaskId(task.id)}
+                          selected={showBulkActions && selectedTasks.has(task.id)}
+                          onSelect={showBulkActions ? ((checked: boolean) => {
+                            const newSet = new Set(selectedTasks);
+                            if (checked) newSet.add(task.id);
+                            else newSet.delete(task.id);
+                            setSelectedTasks(newSet);
+                          }) : undefined}
                         />
                       ))
                     )}
@@ -399,7 +512,14 @@ export const Dashboard: React.FC = () => {
                               if (task.googleTaskId) syncTaskToGoogleTask(updatedTask, googleAccessToken);
                             }
                           }} 
-                          onClick={() => setSelectedTaskId(task.id)} 
+                          onClick={() => setSelectedTaskId(task.id)}
+                          selected={showBulkActions && selectedTasks.has(task.id)}
+                          onSelect={showBulkActions ? ((checked: boolean) => {
+                            const newSet = new Set(selectedTasks);
+                            if (checked) newSet.add(task.id);
+                            else newSet.delete(task.id);
+                            setSelectedTasks(newSet);
+                          }) : undefined}
                         />
                       ))}
                     </AnimatePresence>
@@ -412,22 +532,22 @@ export const Dashboard: React.FC = () => {
 
         <aside className="flex flex-col gap-10">
           <div className="bg-gradient-to-br from-app-primary to-app-primary/80 rounded-[24px] p-8 text-app-primary-fg text-center shadow-[0_20px_40px_-12px_rgba(13,148,136,0.25)]">
-            <h3 className="text-xs uppercase tracking-[0.1em] opacity-80 mb-2">Productivity Score</h3>
+            <h3 className="text-xs uppercase tracking-[0.1em] opacity-80 mb-2">Today's Score</h3>
             <div className="text-[64px] font-bold tracking-[-0.02em] my-2 leading-none">
-              {tasks.length > 0 ? Math.round((tasks.filter(t => t.status === 'done').length / tasks.length) * 100) : 0}%
+              {todayMetrics.score}%
             </div>
-            <p className="text-sm opacity-90">Tasks completed overall</p>
+            <p className="text-sm opacity-90">{todayMetrics.completedToday} of {todayMetrics.tasksWithDueDate || todayMetrics.totalTasks} tasks</p>
           </div>
           
           <div className="border-t border-app-border pt-6">
-             <span className="text-xs uppercase tracking-[0.1em] font-bold text-app-muted mb-5 block">Performance</span>
+             <span className="text-xs uppercase tracking-[0.1em] font-bold text-app-muted mb-5 block">All Time</span>
              <div className="flex justify-between py-3 border-b border-app-surface">
                  <span className="text-sm text-app-muted">Tasks Completed</span>
-                 <span className="text-sm font-semibold text-app-text">{tasks.filter(t => t.status === 'done').length} / {tasks.length}</span>
+                 <span className="text-sm font-semibold text-app-text">{todayMetrics.completedAllTime} / {todayMetrics.totalTasks}</span>
              </div>
              <div className="flex justify-between py-3 border-b border-app-surface">
                  <span className="text-sm text-app-muted">Focus Multiplier</span>
-                 <span className="text-sm font-semibold text-app-primary">1.4x</span>
+                 <span className="text-sm font-semibold text-app-primary">N/A</span>
              </div>
           </div>
         </aside>
@@ -445,7 +565,7 @@ export const Dashboard: React.FC = () => {
   );
 };
 
-const TaskRow = ({ task, index, onToggle, onClick }: { task: Task; index: number; onToggle: () => void; onClick: () => void }) => {
+const TaskRow = ({ task, index, onToggle, onClick, selected, onSelect }: { task: Task; index: number; onToggle: () => void; onClick: () => void; selected?: boolean; onSelect?: (checked: boolean) => void }) => {
   const completedSubtasks = task.subtasks?.filter(st => st.completed).length || 0;
   const totalSubtasks = task.subtasks?.length || 0;
 
@@ -456,18 +576,34 @@ const TaskRow = ({ task, index, onToggle, onClick }: { task: Task; index: number
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.95 }}
       transition={{ type: "spring", stiffness: 100, damping: 20, delay: index * 0.05 }}
-      className="group flex items-center gap-4 py-4 border-b border-app-border transition-all cursor-pointer hover:bg-app-surface px-2 -mx-2 rounded-xl"
+      className={`group flex items-center gap-4 py-4 border-b border-app-border transition-all cursor-pointer hover:bg-app-surface px-2 -mx-2 rounded-xl ${selected ? 'bg-app-primary/5' : ''}`}
       onClick={onClick}
     >
-      <button onClick={(e) => { e.stopPropagation(); onToggle(); }} className="shrink-0 transition-colors">
-        {task.status === 'done' ? (
-          <div className="w-5 h-5 border-2 border-app-primary bg-app-primary rounded-md flex items-center justify-center">
-            <CheckCircle weight="bold" className="w-4 h-4 text-app-primary-fg" />
-          </div>
-        ) : (
-          <div className="w-5 h-5 border-2 border-app-border rounded-md group-hover:border-app-primary transition-colors" />
-        )}
-      </button>
+      {onSelect && (
+        <button 
+          onClick={(e) => { e.stopPropagation(); onSelect(!selected); }} 
+          className="shrink-0 transition-colors"
+        >
+          {selected ? (
+            <div className="w-5 h-5 border-2 border-app-primary bg-app-primary rounded-md flex items-center justify-center">
+              <CheckCircle weight="bold" className="w-4 h-4 text-app-primary-fg" />
+            </div>
+          ) : (
+            <div className="w-5 h-5 border-2 border-app-border rounded-md group-hover:border-app-primary transition-colors" />
+          )}
+        </button>
+      )}
+      {!onSelect && (
+        <button onClick={(e) => { e.stopPropagation(); onToggle(); }} className="shrink-0 transition-colors">
+          {task.status === 'done' ? (
+            <div className="w-5 h-5 border-2 border-app-primary bg-app-primary rounded-md flex items-center justify-center">
+              <CheckCircle weight="bold" className="w-4 h-4 text-app-primary-fg" />
+            </div>
+          ) : (
+            <div className="w-5 h-5 border-2 border-app-border rounded-md group-hover:border-app-primary transition-colors" />
+          )}
+        </button>
+      )}
       <div className="flex-1 min-w-0">
         <p className={`text-base font-medium mb-1 truncate ${task.status === 'done' ? 'line-through text-app-muted/80' : 'text-app-text'}`}>
           {task.title}

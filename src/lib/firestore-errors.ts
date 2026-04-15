@@ -15,33 +15,29 @@ export interface FirestoreErrorInfo {
   path: string | null;
   authInfo: {
     userId?: string;
-    email?: string;
     emailVerified?: boolean;
     isAnonymous?: boolean;
     tenantId?: string;
     providerInfo: {
       providerId: string;
       displayName: string | null;
-      email: string | null;
       photoUrl: string | null;
     }[];
   }
 }
 
-export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null): FirestoreErrorInfo {
   const currentUser = auth.currentUser;
   const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
     authInfo: {
       userId: currentUser?.uid,
-      email: currentUser?.email || undefined,
       emailVerified: currentUser?.emailVerified,
       isAnonymous: currentUser?.isAnonymous,
       tenantId: currentUser?.tenantId || undefined,
       providerInfo: currentUser?.providerData.map(provider => ({
         providerId: provider.providerId,
         displayName: provider.displayName,
-        email: provider.email,
         photoUrl: provider.photoURL
       })) || []
     },
@@ -49,5 +45,5 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     path
   };
   console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
+  return errInfo;
 }

@@ -71,7 +71,7 @@ export const syncTaskToGoogleTask = async (task: Task, token: string): Promise<b
   }
 };
 
-export const fetchGoogleTasks = async (token: string) => {
+export const fetchGoogleTasks = async (token: string): Promise<{ tasks: any[], taskListId: string }> => {
   try {
     const listsRes = await fetch('https://tasks.googleapis.com/tasks/v1/users/@me/lists', {
       headers: { 'Authorization': `Bearer ${token}` }
@@ -83,7 +83,7 @@ export const fetchGoogleTasks = async (token: string) => {
     
     const listsData = await listsRes.json();
     const defaultList = listsData.items?.[0];
-    if (!defaultList) return [];
+    if (!defaultList) return { tasks: [], taskListId: '' };
 
     const tasksRes = await fetch(`https://tasks.googleapis.com/tasks/v1/lists/${defaultList.id}/tasks?showHidden=false`, {
       headers: { 'Authorization': `Bearer ${token}` }
@@ -94,7 +94,7 @@ export const fetchGoogleTasks = async (token: string) => {
     }
     
     const tasksData = await tasksRes.json();
-    return tasksData.items || [];
+    return { tasks: tasksData.items || [], taskListId: defaultList.id };
   } catch (error) {
     console.error('Error fetching Google Tasks:', error);
     throw error;
