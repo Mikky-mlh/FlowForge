@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { User, signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
+import { User, signInWithPopup, signOut, onAuthStateChanged, GoogleAuthProvider } from 'firebase/auth';
 import { auth, googleProvider, db } from '../firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { v4 as uuidv4 } from 'uuid';
@@ -10,7 +10,8 @@ interface AuthContextType {
   syncId: string | null;
   loading: boolean;
   error: string | null;
-  signIn: () => Promise<void>;
+  googleAccessToken: string | null;
+  signIn: () => Promise<string | null>;
   logOut: () => Promise<void>;
   linkDevice: (code: string) => Promise<boolean>;
 }
@@ -22,6 +23,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [syncId, setSyncId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [googleAccessToken, setGoogleAccessToken] = useState<string | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -54,13 +56,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return unsubscribe;
   }, []);
 
-  const signIn = async () => {
+  const signIn = async (): Promise<string | null> => {
     setError(null);
     try {
-      await signInWithPopup(auth, googleProvider);
+      const result = await signInWithPopup(auth, googleProvider);
+      const credential = GoogleAuthProvider.credentialFromResult(result);
+      if (credential?.accessToken) {
+        setGoogleAccessToken(credential.accessToken);
+        return credential.accessToken;
+      }
+      return null;
     } catch (error: any) {
       console.error('Error signing in', error);
       setError(error.message || 'Failed to sign in with Google');
+      return null;
     }
   };
 
@@ -68,6 +77,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await signOut(auth);
     localStorage.removeItem('flowforge_sync_id');
     setSyncId(null);
+    setGoogleAccessToken(null);
   };
 
   const linkDevice = async (code: string) => {
@@ -78,7 +88,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, syncId, loading, error, signIn, logOut, linkDevice }}>
+    <AuthContext.Provider value={{ user, syncId, loading, error, googleAccessToken, signIn, logOut, linkDevice }}>
       {children}
     </AuthContext.Provider>
   );

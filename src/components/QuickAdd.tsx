@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
 import * as chrono from 'chrono-node';
 import { useTasks } from '../contexts/TaskContext';
+import { useAuth } from '../contexts/AuthContext';
 import { PaperPlaneRight } from '@phosphor-icons/react';
 import { motion } from 'framer-motion';
+import { syncTaskToCalendar } from '../lib/googleApi';
 
 export const QuickAdd: React.FC = () => {
   const [input, setInput] = useState('');
-  const { addTask } = useTasks();
+  const { addTask, updateTask } = useTasks();
+  const { googleAccessToken } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -14,20 +17,52 @@ export const QuickAdd: React.FC = () => {
 
     const parsed = chrono.parse(input);
     let dueDate = undefined;
+    let duration = undefined;
     let title = input;
 
     if (parsed.length > 0) {
       dueDate = parsed[0].start.date().toISOString();
-      title = input.replace(parsed[0].text, '').trim();
+      if (parsed[0].end) {
+        duration = Math.round((parsed[0].end.date().getTime() - parsed[0].start.date().getTime()) / 60000);
+      }
+      title = title.replace(parsed[0].text, '').trim();
     }
 
-    await addTask({
+    // Parse tags (#tag)
+    const tags = (title.match(/#\w+/g) || []).map(t => t.slice(1));
+    title = title.replace(/#\w+/g, '').trim();
+
+    // Parse priority (!high, !medium, !low)
+    let priority: 'low' | 'medium' | 'high' = 'medium';
+    if (title.includes('!high')) {
+      priority = 'high';
+      title = title.replace('!high', '').trim();
+    } else if (title.includes('!low')) {
+      priority = 'low';
+      title = title.replace('!low', '').trim();
+    } else if (title.includes('!medium')) {
+      priority = 'medium';
+      title = title.replace('!medium', '').trim();
+    }
+
+    // Clean up extra spaces
+    title = title.replace(/\s+/g, ' ').trim();
+
+    const newTask = await addTask({
       title,
-      priority: 'medium',
+      priority,
       status: 'todo',
-      tags: [],
+      tags,
       dueDate,
+      duration,
     });
+
+    if (newTask && dueDate && googleAccessToken) {
+      const eventId = await syncTaskToCalendar(newTask, googleAccessToken);
+      if (eventId) {
+        updateTask(newTask.id, { calendarEventId: eventId });
+      }
+    }
 
     setInput('');
   };

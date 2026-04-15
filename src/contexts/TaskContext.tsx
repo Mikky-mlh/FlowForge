@@ -19,9 +19,14 @@ export interface Task {
   status: 'todo' | 'in-progress' | 'done';
   tags: string[];
   dueDate?: string;
+  duration?: number; // in minutes
   syncId: string;
   createdAt: number;
   subtasks?: Subtask[];
+  dependentTaskId?: string;
+  calendarEventId?: string;
+  googleTaskId?: string;
+  googleTaskListId?: string;
 }
 
 interface TaskContextType {

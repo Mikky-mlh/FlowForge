@@ -10,8 +10,14 @@ export const db = getFirestore(app);
 export const storage = getStorage(app);
 export const googleProvider = new GoogleAuthProvider();
 
-// Temporarily disabled to test login
-// googleProvider.addScope('https://www.googleapis.com/auth/calendar.events');
+// Add calendar and tasks scopes for sync
+googleProvider.addScope('https://www.googleapis.com/auth/calendar.events');
+googleProvider.addScope('https://www.googleapis.com/auth/tasks.readonly');
+
+// Force consent screen so users can check the permission boxes
+googleProvider.setCustomParameters({
+  prompt: 'consent'
+});
 
 // Enable offline persistence
 enableIndexedDbPersistence(db).catch((err) => {
