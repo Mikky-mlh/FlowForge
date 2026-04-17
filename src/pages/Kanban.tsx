@@ -79,7 +79,32 @@ export const KanbanPage: React.FC = () => {
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
 
-  const getTasksByStatus = (status: string) => tasks.filter(task => task.status === status);
+  const getTasksByStatus = (status: string) => {
+    return tasks
+      .filter(task => task.status === status)
+      .sort((a, b) => {
+        // Done column: most recently completed first
+        if (status === 'done') {
+          return (b.completedAt || 0) - (a.completedAt || 0);
+        }
+        // In-progress: high priority first, then by creation date
+        if (status === 'in-progress') {
+          const pMap = { high: 3, medium: 2, low: 1 };
+          if (pMap[a.priority] !== pMap[b.priority]) {
+            return pMap[b.priority] - pMap[a.priority];
+          }
+        }
+        // Todo: by due date (soonest first), then priority, then creation
+        const aDate = isTodoTask(a) && a.dueDate ? new Date(a.dueDate).getTime() : Infinity;
+        const bDate = isTodoTask(b) && b.dueDate ? new Date(b.dueDate).getTime() : Infinity;
+        if (aDate !== bDate) return aDate - bDate;
+        const pMap = { high: 3, medium: 2, low: 1 };
+        if (pMap[a.priority] !== pMap[b.priority]) {
+          return pMap[b.priority] - pMap[a.priority];
+        }
+        return b.createdAt - a.createdAt;
+      });
+  };
   const selectedTask = selectedTaskId ? tasks.find(t => t.id === selectedTaskId) : null;
   const activeTask = activeId ? tasks.find(t => t.id === activeId) : null;
 

@@ -43,6 +43,7 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClos
     }
 
     await addTask({
+      type: 'task',
       title: sanitizeTitle(title),
       description: description.trim() || undefined,
       priority,
@@ -54,12 +55,10 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClos
       customRecurrenceDays: recurrenceRule === 'custom' ? customDays : undefined,
       subtasks: subtasks.map((text, index) => ({
         id: crypto.randomUUID(),
-        text,
+        title: text,
         completed: false,
-        order: index,
       })),
-      dependsOn: dependentTask.trim() || undefined,
-      attachments,
+      dependentTaskId: dependentTask.trim() || undefined,
       notificationsEnabled,
     });
 

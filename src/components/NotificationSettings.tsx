@@ -1,9 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Bell, BellSlash } from '@phosphor-icons/react';
+import { Bell, BellSlash, Clock, Repeat } from '@phosphor-icons/react';
+import { useTasks } from '../contexts/TaskContext';
+import { restoreNotifications, getNotificationSettings, saveNotificationSettings, NotificationSettings as NotifSettings } from '../lib/notificationScheduler';
 
 export const NotificationSettings: React.FC = () => {
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [permission, setPermission] = useState<NotificationPermission>('default');
+  const [settings, setSettings] = useState<NotifSettings>(getNotificationSettings());
+  const { tasks } = useTasks();
 
   useEffect(() => {
     if ('Notification' in window) {
@@ -35,14 +39,27 @@ export const NotificationSettings: React.FC = () => {
             body: 'You will now receive reminders for your tasks',
             icon: '/icon-192.svg'
           });
+          // Restore all notifications
+          restoreNotifications(tasks);
         }
       } else if (Notification.permission === 'granted') {
         setNotificationsEnabled(true);
         localStorage.setItem('flowforge_notifications_enabled', 'true');
+        restoreNotifications(tasks);
       }
     } else {
       setNotificationsEnabled(false);
       localStorage.setItem('flowforge_notifications_enabled', 'false');
+    }
+  };
+
+  const handleSettingChange = (key: keyof NotifSettings, value: number) => {
+    const newSettings = { ...settings, [key]: value };
+    setSettings(newSettings);
+    saveNotificationSettings(newSettings);
+    // Reschedule all notifications with new settings
+    if (notificationsEnabled) {
+      restoreNotifications(tasks);
     }
   };
 
@@ -83,11 +100,95 @@ export const NotificationSettings: React.FC = () => {
       )}
 
       {notificationsEnabled && (
-        <div className="p-3 bg-app-surface rounded-lg">
-          <p className="text-xs text-app-muted">
-            You'll receive notifications 15 minutes before tasks are due and for daily routines at their scheduled time.
-          </p>
-        </div>
+        <>
+          <div className="p-4 bg-app-surface rounded-lg space-y-4 mt-4">
+            <div>
+              <label className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-app-text flex items-center gap-2">
+                  <Clock className="w-4 h-4" />
+                  Task Warning Time
+                </span>
+              </label>
+              <div className="flex items-center gap-3">
+                <input
+                  type="range"
+                  min="0"
+                  max="60"
+                  step="5"
+                  value={settings.taskWarningMinutes}
+                  onChange={(e) => handleSettingChange('taskWarningMinutes', parseInt(e.target.value))}
+                  className="flex-1 h-2 bg-app-border rounded-lg appearance-none cursor-pointer"
+                />
+                <span className="text-sm font-mono text-app-text min-w-[60px] text-right">
+                  {settings.taskWarningMinutes === 0 ? 'At time' : `${settings.taskWarningMinutes} min`}
+                </span>
+              </div>
+              <p className="text-xs text-app-muted mt-1">Notify this many minutes before task due time</p>
+            </div>
+
+            <div>
+              <label className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-app-text flex items-center gap-2">
+                  <Clock className="w-4 h-4" />
+                  Routine Reminder Time
+                </span>
+              </label>
+              <div className="flex items-center gap-3">
+                <input
+                  type="range"
+                  min="0"
+                  max="30"
+                  step="5"
+                  value={settings.routineReminderMinutes}
+                  onChange={(e) => handleSettingChange('routineReminderMinutes', parseInt(e.target.value))}
+                  className="flex-1 h-2 bg-app-border rounded-lg appearance-none cursor-pointer"
+                />
+                <span className="text-sm font-mono text-app-text min-w-[60px] text-right">
+                  {settings.routineReminderMinutes === 0 ? 'At time' : `${settings.routineReminderMinutes} min`}
+                </span>
+              </div>
+              <p className="text-xs text-app-muted mt-1">Notify this many minutes before routine time</p>
+            </div>
+
+            <div>
+              <label className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-app-text flex items-center gap-2">
+                  <Repeat className="w-4 h-4" />
+                  Repeat Interval
+                </span>
+              </label>
+              <div className="flex items-center gap-3">
+                <input
+                  type="range"
+                  min="0"
+                  max="30"
+                  step="5"
+                  value={settings.repeatInterval}
+                  onChange={(e) => handleSettingChange('repeatInterval', parseInt(e.target.value))}
+                  className="flex-1 h-2 bg-app-border rounded-lg appearance-none cursor-pointer"
+                />
+                <span className="text-sm font-mono text-app-text min-w-[60px] text-right">
+                  {settings.repeatInterval === 0 ? 'Off' : `${settings.repeatInterval} min`}
+                </span>
+              </div>
+              <p className="text-xs text-app-muted mt-1">Repeat task notifications every X minutes (0 = no repeat)</p>
+            </div>
+          </div>
+
+          <div className="p-3 bg-app-surface rounded-lg mt-4">
+            <div className="flex items-start gap-2">
+              <Bell className="w-4 h-4 text-app-primary mt-0.5" />
+              <div className="flex-1">
+                <p className="text-xs font-medium text-app-text mb-1">Current Settings</p>
+                <ul className="text-xs text-app-muted space-y-1">
+                  <li>• Tasks: {settings.taskWarningMinutes === 0 ? 'At due time' : `${settings.taskWarningMinutes} minutes before`}</li>
+                  <li>• Routines: {settings.routineReminderMinutes === 0 ? 'At scheduled time' : `${settings.routineReminderMinutes} minutes before`}</li>
+                  <li>• Repeats: {settings.repeatInterval === 0 ? 'Disabled' : `Every ${settings.repeatInterval} minutes`}</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );

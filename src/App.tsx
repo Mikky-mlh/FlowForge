@@ -11,7 +11,7 @@ import { Settings } from './pages/Settings';
 import { ToastProvider } from './components/ToastProvider';
 import { Help } from './pages/Help';
 import { CalendarPage } from './pages/Calendar';
-import { HabitsPage } from './pages/Habits';
+import { HabitsPage } from './pages/HabitsNew';
 import { KanbanPage } from './pages/Kanban';
 import { GettingStartedPopup } from './components/GettingStartedPopup';
 

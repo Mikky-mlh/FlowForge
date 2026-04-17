@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Tag, Flag, Plus, Clock, Bell } from '@phosphor-icons/react';
+import { X, Clock, Bell } from '@phosphor-icons/react';
 import { useTasks } from '../contexts/TaskContext';
-import { sanitizeTitle, sanitizeTags } from '../lib/sanitize';
+import { sanitizeTitle } from '../lib/sanitize';
 import { TimePicker } from './TimePicker';
 
 interface CreateRoutineModalProps {
@@ -15,9 +15,6 @@ export const CreateRoutineModal: React.FC<CreateRoutineModalProps> = ({ isOpen, 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [selectedTime, setSelectedTime] = useState('09:00');
-  const [priority, setPriority] = useState<'low' | 'medium' | 'high'>('medium');
-  const [tags, setTags] = useState<string[]>([]);
-  const [tagInput, setTagInput] = useState('');
   const [routineType, setRoutineType] = useState<'all' | 'working' | 'nonworking'>('all');
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
 
@@ -25,18 +22,14 @@ export const CreateRoutineModal: React.FC<CreateRoutineModalProps> = ({ isOpen, 
     e.preventDefault();
     if (!title.trim()) return;
 
-    const today = new Date();
-    const [hours, minutes] = selectedTime.split(':');
-    today.setHours(parseInt(hours), parseInt(minutes), 0, 0);
-
     await addTask({
+      type: 'routine',
       title: sanitizeTitle(title),
       description: description.trim() || undefined,
-      priority,
+      priority: 'medium',
       status: 'todo',
-      tags: sanitizeTags(tags),
-      dueDate: today.toISOString(),
-      isRoutine: true,
+      tags: [],
+      scheduleTime: selectedTime,
       routineType,
       notificationsEnabled,
     });
@@ -49,22 +42,8 @@ export const CreateRoutineModal: React.FC<CreateRoutineModalProps> = ({ isOpen, 
     setTitle('');
     setDescription('');
     setSelectedTime('09:00');
-    setPriority('medium');
-    setTags([]);
-    setTagInput('');
     setRoutineType('all');
     setNotificationsEnabled(true);
-  };
-
-  const addTag = () => {
-    if (tagInput.trim() && !tags.includes(tagInput.trim())) {
-      setTags([...tags, tagInput.trim()]);
-      setTagInput('');
-    }
-  };
-
-  const removeTag = (tag: string) => {
-    setTags(tags.filter(t => t !== tag));
   };
 
   if (!isOpen) return null;
@@ -141,52 +120,6 @@ export const CreateRoutineModal: React.FC<CreateRoutineModalProps> = ({ isOpen, 
                   <input type="radio" checked={routineType === 'nonworking'} onChange={() => setRoutineType('nonworking')} className="text-app-primary" />
                   <span className="text-sm text-app-text">Non-working days only</span>
                 </label>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-app-text mb-2 flex items-center gap-2">
-                <Flag className="w-4 h-4" />
-                Priority
-              </label>
-              <select
-                value={priority}
-                onChange={e => setPriority(e.target.value as any)}
-                className="w-full bg-app-surface border border-app-border rounded-xl px-4 py-3 text-app-text focus:border-app-primary outline-none"
-              >
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-app-text mb-2 flex items-center gap-2">
-                <Tag className="w-4 h-4" />
-                Tags
-              </label>
-              <div className="flex gap-2 mb-2">
-                <input
-                  type="text"
-                  value={tagInput}
-                  onChange={e => setTagInput(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addTag())}
-                  placeholder="Add tag..."
-                  className="flex-1 bg-app-surface border border-app-border rounded-xl px-4 py-2 text-app-text focus:border-app-primary outline-none"
-                />
-                <button type="button" onClick={addTag} className="px-4 py-2 bg-app-primary text-app-primary-fg rounded-xl">
-                  <Plus className="w-5 h-5" />
-                </button>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {tags.map(tag => (
-                  <span key={tag} className="px-3 py-1 bg-app-surface text-app-text rounded-lg text-sm flex items-center gap-2">
-                    {tag}
-                    <button type="button" onClick={() => removeTag(tag)} className="text-app-muted hover:text-red-500">
-                      <X className="w-3 h-3" />
-                    </button>
-                  </span>
-                ))}
               </div>
             </div>
 

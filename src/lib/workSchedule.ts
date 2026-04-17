@@ -1,6 +1,7 @@
 export interface WorkScheduleSettings {
   saturdayIsWorkday: boolean;
-  customNonWorkingDays: string[]; // ISO date strings
+  sundayIsWorkday: boolean;
+  customDays: Record<string, boolean>; // 'YYYY-MM-DD': true/false
 }
 
 const STORAGE_KEY = 'flowforge_work_schedule';
@@ -8,9 +9,9 @@ const STORAGE_KEY = 'flowforge_work_schedule';
 export const getWorkSchedule = (): WorkScheduleSettings => {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
-    return stored ? JSON.parse(stored) : { saturdayIsWorkday: false, customNonWorkingDays: [] };
+    return stored ? JSON.parse(stored) : { saturdayIsWorkday: false, sundayIsWorkday: false, customDays: {} };
   } catch {
-    return { saturdayIsWorkday: false, customNonWorkingDays: [] };
+    return { saturdayIsWorkday: false, sundayIsWorkday: false, customDays: {} };
   }
 };
 
@@ -20,28 +21,30 @@ export const saveWorkSchedule = (settings: WorkScheduleSettings): void => {
 
 export const isWorkingDay = (date: Date): boolean => {
   const schedule = getWorkSchedule();
-  const dateStr = date.toISOString().split('T')[0];
+  const day = date.getDay();
+  const dateKey = date.toISOString().split('T')[0];
   
-  if (schedule.customNonWorkingDays.includes(dateStr)) {
-    return false;
+  // Check custom override first
+  if (dateKey in schedule.customDays) {
+    return schedule.customDays[dateKey];
   }
   
-  const day = date.getDay();
-  if (day === 0) return false; // Sunday
+  if (day === 0) return schedule.sundayIsWorkday;
   if (day === 6) return schedule.saturdayIsWorkday;
   
   return true;
 };
 
-export const toggleCustomNonWorkingDay = (date: Date): void => {
+export const toggleDayOverride = (date: Date, isWorking: boolean): void => {
   const schedule = getWorkSchedule();
-  const dateStr = date.toISOString().split('T')[0];
-  
-  if (schedule.customNonWorkingDays.includes(dateStr)) {
-    schedule.customNonWorkingDays = schedule.customNonWorkingDays.filter(d => d !== dateStr);
-  } else {
-    schedule.customNonWorkingDays.push(dateStr);
-  }
-  
+  const dateKey = date.toISOString().split('T')[0];
+  schedule.customDays[dateKey] = isWorking;
+  saveWorkSchedule(schedule);
+};
+
+export const removeDayOverride = (date: Date): void => {
+  const schedule = getWorkSchedule();
+  const dateKey = date.toISOString().split('T')[0];
+  delete schedule.customDays[dateKey];
   saveWorkSchedule(schedule);
 };

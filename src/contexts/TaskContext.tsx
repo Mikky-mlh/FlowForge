@@ -4,6 +4,8 @@ import { db } from '../firebase';
 import { useAuth } from './AuthContext';
 import { addToSyncQueue, getSyncQueue, removeFromSyncQueue } from '../lib/idb';
 import { Attachment } from '../lib/storage';
+import { scheduleTaskNotification, scheduleRoutineNotification, cancelNotification, restoreNotifications } from '../lib/notificationScheduler';
+import { recordCompletion } from '../lib/habitTracking';
 
 export interface Subtask {
   id: string;
@@ -11,7 +13,7 @@ export interface Subtask {
   completed: boolean;
 }
 
-export interface Task {
+interface BaseItem {
   id: string;
   title: string;
   description?: string;
@@ -19,34 +21,48 @@ export interface Task {
   status: 'todo' | 'in-progress' | 'done';
   tags: string[];
   category?: string;
-  dueDate?: string;
-  duration?: number;
   syncId: string;
   createdAt: number;
   completedAt?: number;
   lastModified?: number;
   subtasks?: Subtask[];
-  dependentTaskId?: string;
-  calendarEventId?: string;
-  googleTaskId?: string;
-  googleTaskListId?: string;
+  notificationsEnabled?: boolean;
+  attachments?: Attachment[];
+}
+
+interface TodoTask extends BaseItem {
+  type: 'task';
+  dueDate?: string;
+  duration?: number;
   recurring?: boolean;
   recurrenceRule?: 'weekly' | 'monthly' | 'custom';
   customRecurrenceDays?: number[];
   recurrenceEnd?: number;
   parentTaskId?: string;
-  attachments?: Attachment[];
-  isRoutine?: boolean;
-  routineType?: 'all' | 'working' | 'nonworking';
-  notificationsEnabled?: boolean;
+  dependentTaskId?: string;
+  calendarEventId?: string;
+  googleTaskId?: string;
+  googleTaskListId?: string;
 }
+
+interface Routine extends BaseItem {
+  type: 'routine';
+  scheduleTime: string; // HH:mm format
+  routineType: 'all' | 'working' | 'nonworking';
+}
+
+export type Task = TodoTask | Routine;
+
+// Type guards
+export const isRoutine = (task: Task): task is Routine => task.type === 'routine';
+export const isTodoTask = (task: Task): task is TodoTask => task.type === 'task';
 
 interface TaskContextType {
   tasks: Task[];
   hasMore: boolean;
   loadMore: () => Promise<void>;
   isLoadingMore: boolean;
-  addTask: (task: Omit<Task, 'id' | 'syncId' | 'createdAt'>) => Promise<void>;
+  addTask: (task: Omit<Task, 'id' | 'syncId' | 'createdAt' | 'lastModified'>) => Promise<void>;
   updateTask: (id: string, updates: Partial<Task>) => Promise<void>;
   deleteTask: (id: string) => Promise<void>;
   isOnline: boolean;
@@ -95,7 +111,6 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (isOnline && syncId) {
       const syncOfflineData = async () => {
         const queue = await getSyncQueue();
-        const itemsToRemove: string[] = [];
         
         for (const item of queue) {
           try {
@@ -104,20 +119,11 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
             } else if (item.action === 'DELETE') {
               await deleteDoc(doc(db, item.collection, item.data.id));
             }
-            // Only mark for removal AFTER successful sync
-            itemsToRemove.push(item.id);
+            // Remove immediately after successful sync
+            await removeFromSyncQueue(item.id);
           } catch (e) {
-            console.error('Failed to sync item', e);
-            // Keep in queue for retry - do NOT remove
-          }
-        }
-        
-        // Remove all successfully synced items from queue
-        for (const id of itemsToRemove) {
-          try {
-            await removeFromSyncQueue(id);
-          } catch (e) {
-            console.error('Failed to remove synced item from queue', e);
+            console.error('Failed to sync item', item.id, e);
+            // Leave in queue for retry
           }
         }
       };
@@ -132,12 +138,30 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     const q = query(collection(db, 'tasks'), where('syncId', '==', syncId));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const unsubscribe = onSnapshot(q, { includeMetadataChanges: true }, (snapshot) => {
+      // Only update state from confirmed server data, not local pending writes
+      // This prevents the flash where optimistic state gets overwritten
+      if (snapshot.metadata.hasPendingWrites) return;
+      
       const tasksData: Task[] = [];
-      snapshot.forEach((doc) => {
-        tasksData.push(doc.data() as Task);
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data() as any;
+        // Migration: add type field if missing
+        if (!data.type) {
+          data.type = data.isRoutine ? 'routine' : 'task';
+          // Migrate scheduleTime for routines
+          if (data.type === 'routine' && data.dueDate && !data.scheduleTime) {
+            const date = new Date(data.dueDate);
+            data.scheduleTime = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+          }
+        }
+        tasksData.push(data as Task);
       });
-      setTasks(tasksData.sort((a, b) => b.createdAt - a.createdAt));
+      const sortedTasks = tasksData.sort((a, b) => b.createdAt - a.createdAt);
+      setTasks(sortedTasks);
+      
+      // Restore notifications after tasks are loaded
+      restoreNotifications(sortedTasks);
     }, (error) => {
       console.error('Firestore listen error:', error);
     });
@@ -148,13 +172,37 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const addTask = async (taskData: Omit<Task, 'id' | 'syncId' | 'createdAt' | 'lastModified'>) => {
     if (!syncId) return;
     const now = Date.now();
-    const newTask: Task = {
+    
+    // Create base task with common fields
+    let cleanTask: any = {
       ...taskData,
       id: crypto.randomUUID(),
       syncId,
       createdAt: now,
       lastModified: now,
     };
+
+    // Strip out invalid fields based on type
+    if (taskData.type === 'routine') {
+      // Remove task-specific fields from routines
+      delete cleanTask.dueDate;
+      delete cleanTask.duration;
+      delete cleanTask.recurring;
+      delete cleanTask.recurrenceRule;
+      delete cleanTask.customRecurrenceDays;
+      delete cleanTask.recurrenceEnd;
+      delete cleanTask.parentTaskId;
+      delete cleanTask.dependentTaskId;
+      delete cleanTask.calendarEventId;
+      delete cleanTask.googleTaskId;
+      delete cleanTask.googleTaskListId;
+    } else if (taskData.type === 'task') {
+      // Remove routine-specific fields from tasks
+      delete cleanTask.scheduleTime;
+      delete cleanTask.routineType;
+    }
+
+    const newTask = cleanTask as Task;
 
     // Optimistic update
     setTasks(prev => [newTask, ...prev]);
@@ -169,29 +217,76 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } else {
       await addToSyncQueue('ADD', 'tasks', newTask);
     }
+    
+    // Schedule notification for new task
+    if (isRoutine(newTask)) {
+      scheduleRoutineNotification(newTask);
+    } else if (isTodoTask(newTask)) {
+      scheduleTaskNotification(newTask);
+    }
   };
 
   const updateTask = async (id: string, updates: Partial<Task>) => {
     // Add completedAt and lastModified timestamps
     const now = Date.now();
-    const finalUpdates = updates.status === 'done' 
+    let finalUpdates: any = updates.status === 'done' 
       ? { ...updates, completedAt: now, lastModified: now }
       : { ...updates, lastModified: now };
     
     const currentTask = tasks.find(t => t.id === id);
-    const isCompletingRecurring = currentTask?.status !== 'done' && updates.status === 'done' && currentTask?.recurring;
     
-    setTasks(prev => prev.map(t => t.id === id ? { ...t, ...finalUpdates } : t));
+    // Strip out invalid fields based on current task type
+    if (currentTask) {
+      if (currentTask.type === 'routine') {
+        // Remove task-specific fields from routine updates
+        delete finalUpdates.dueDate;
+        delete finalUpdates.duration;
+        delete finalUpdates.recurring;
+        delete finalUpdates.recurrenceRule;
+        delete finalUpdates.customRecurrenceDays;
+        delete finalUpdates.recurrenceEnd;
+        delete finalUpdates.parentTaskId;
+        delete finalUpdates.dependentTaskId;
+        delete finalUpdates.calendarEventId;
+        delete finalUpdates.googleTaskId;
+        delete finalUpdates.googleTaskListId;
+      } else if (currentTask.type === 'task') {
+        // Remove routine-specific fields from task updates
+        delete finalUpdates.scheduleTime;
+        delete finalUpdates.routineType;
+      }
+    }
+    
+    const isCompletingRecurring = currentTask?.status !== 'done' && updates.status === 'done' && isTodoTask(currentTask) && currentTask.recurring;
+    
+    const updatedTask = { ...currentTask, ...finalUpdates } as Task;
+    setTasks(prev => prev.map(t => t.id === id ? updatedTask : t));
+    
+    // Record habit completion for routines
+    if (updates.status === 'done' && currentTask && isRoutine(currentTask)) {
+      recordCompletion(currentTask.id);
+    }
+    
+    // Update notifications
+    if (updates.status === 'done') {
+      cancelNotification(id);
+    } else if (currentTask) {
+      if (isRoutine(updatedTask)) {
+        scheduleRoutineNotification(updatedTask);
+      } else if (isTodoTask(updatedTask)) {
+        scheduleTaskNotification(updatedTask);
+      }
+    }
     
     if (isOnline) {
       try {
         await updateDoc(doc(db, 'tasks', id), finalUpdates);
         
         // If completing a recurring task, create the next instance
-        if (isCompletingRecurring && currentTask) {
+        if (isCompletingRecurring && currentTask && isTodoTask(currentTask)) {
           const nextDueDate = getNextRecurrenceDate(currentTask.dueDate, currentTask.recurrenceRule!);
           if (nextDueDate && (!currentTask.recurrenceEnd || nextDueDate.getTime() < currentTask.recurrenceEnd)) {
-            const nextTask: Task = {
+            const nextTask: TodoTask = {
               ...currentTask,
               id: crypto.randomUUID(),
               status: 'todo',
@@ -237,6 +332,7 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const deleteTask = async (id: string) => {
     setTasks(prev => prev.filter(t => t.id !== id));
+    cancelNotification(id);
     
     if (isOnline) {
       try {

@@ -1,0 +1,17 @@
+Trying to create the best todo app possible on free resources and this is the current progress.
+
+My goals:
+
+1. Google Calendar synced in (both ways). Auto-Sync enabled by default(when access to internet)
+2. Supported on web as well as on android app
+3. Offline support in app
+4. User can customize the Ui to its best and the way they want
+5. Support on multiple devices with same id
+6. Tracking down progress and helping building a habit
+7. Tasks can be recurring, dependent, subtasks and even attachments can be added to them
+8. Support for Pomodoro technique and time tracking
+9. Notification on each task starting and way before the deadline to alert User
+10. User can choose how early and how regularly he wants Notifications and also disable for tasks for which he does not need notifications
+11. Establishing that TODOs/Tasks and Routine, both are different and hence handling both different ways
+    -TODOs: Tasks with priority order and tags to identify at one glance which is urgent and important. Dependent on particular days and deadlines.
+    -Routines: Tasks that are recurring and have no priority order. They are more like habits that need to be built and tracked down. Differ based on working and non-working days. Sunday is non-working by default. User can also make Saturday non-working by default. And if there is an unexpected holiday he can toggle it to a non-working day or change a working day to non-working one. The routine suggested and followed by the app for that day is hence different based on the type of day.
