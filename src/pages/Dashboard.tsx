@@ -191,7 +191,7 @@ export const Dashboard: React.FC = () => {
   const handleCalendarSync = async () => {
     let token = await getValidGoogleToken();
     if (!token) {
-      token = await signIn(true); // Request calendar scope
+      token = await signIn(true);
       if (!token) return;
     }
     
@@ -202,96 +202,57 @@ export const Dashboard: React.FC = () => {
     
     setIsSyncing(true);
     try {
-      // Step 1: Get or retrieve cached Google Tasks list
-      let taskListId = localStorage.getItem('flowforge_google_tasklist_id');
+      const { fetchGoogleTasks, fetchGoogleCalendarEvents } = await import('../lib/googleApi');
       
-      if (!taskListId) {
-        const listsRes = await fetch('https://tasks.googleapis.com/tasks/v1/users/@me/lists', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        
-        if (listsRes.ok) {
-          const listsData = await listsRes.json();
-          taskListId = listsData.items?.[0]?.id || '';
-          if (taskListId) localStorage.setItem('flowforge_google_tasklist_id', taskListId);
-        }
-      }
-      
-      if (!taskListId) {
-        throw new Error('No Google Tasks list found');
-      }
-      
-      // Step 2: Import from Google Tasks
-      const tasksRes = await fetch(`https://tasks.googleapis.com/tasks/v1/lists/${taskListId}/tasks`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      
-      let importCount = 0;
-      if (tasksRes.ok) {
-        const tasksData = await tasksRes.json();
-        
-        for (const gTask of tasksData.items || []) {
-          if (gTask.title) {
-            const existingTask = tasks.find(t => isTodoTask(t) && t.googleTaskId === gTask.id);
-            if (!existingTask) {
-              const newTask: Omit<TodoTask, 'id' | 'syncId' | 'createdAt' | 'lastModified'> = {
-                type: 'task',
-                title: gTask.title,
-                description: gTask.notes || undefined,
-                dueDate: gTask.due || undefined,
-                status: gTask.status === 'completed' ? 'done' : 'todo',
-                priority: 'medium',
-                googleTaskId: gTask.id,
-                googleTaskListId: taskListId,
-                tags: [],
-              };
-              await addTask(newTask);
-              importCount++;
-            }
-          }
+      const { tasks: gTasks } = await fetchGoogleTasks(token);
+      const calendarEvents = await fetchGoogleCalendarEvents(token);
+      let importedCount = 0;
+
+      for (const gTask of gTasks) {
+        const exists = tasks.some(t => isTodoTask(t) && t.googleTaskId === gTask.id);
+        if (!exists) {
+          await addTask({
+            type: 'task',
+            title: gTask.title || 'Untitled Task',
+            description: gTask.notes || '',
+            priority: 'medium',
+            status: gTask.status === 'completed' ? 'done' : 'todo',
+            tags: ['imported-from-google'],
+            dueDate: gTask.due || undefined,
+            googleTaskId: gTask.id,
+          });
+          importedCount++;
         }
       }
 
-      // Step 3: Export tasks to Google Tasks (not Calendar)
-      const tasksToExport = tasks.filter(t => isTodoTask(t) && !t.googleTaskId);
-      let exportCount = 0;
-      
-      for (const task of tasksToExport) {
-        if (!isTodoTask(task)) continue;
-        
-        const gTask: any = {
-          title: task.title,
-          notes: task.description || '',
-          status: task.status === 'done' ? 'completed' : 'needsAction',
-          due: task.dueDate || undefined,
-        };
-        
-        if (task.status === 'done' && task.completedAt) {
-          gTask.completed = new Date(task.completedAt).toISOString();
-        }
-        
-        const response = await fetch(`https://tasks.googleapis.com/tasks/v1/lists/${taskListId}/tasks`, { 
-          method: 'POST', 
-          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, 
-          body: JSON.stringify(gTask) 
-        });
-        
-        if (response.ok) { 
-          const data = await response.json(); 
-          await updateTask(task.id, { googleTaskId: data.id, googleTaskListId: taskListId }); 
-          exportCount++;
-        } else {
-          const errorText = await response.text();
-          console.error('Failed to create Google Task:', errorText);
+      for (const event of calendarEvents) {
+        if (!event.start?.dateTime) continue;
+        const exists = tasks.some(t => t.calendarEventId === event.id);
+        if (!exists) {
+          const startDate = new Date(event.start.dateTime);
+          const scheduleTime = `${String(startDate.getHours()).padStart(2, '0')}:${String(startDate.getMinutes()).padStart(2, '0')}`;
+          await addTask({
+            type: 'routine',
+            title: event.summary || 'Untitled Event',
+            description: event.description || '',
+            priority: 'medium',
+            status: 'todo',
+            tags: ['imported-from-calendar'],
+            scheduleTime,
+            routineType: 'all',
+            calendarEventId: event.id,
+          });
+          importedCount++;
         }
       }
-      
-      addToast(`Synced! Imported ${importCount} task(s), exported ${exportCount} task(s) to Google Tasks.`, 'success');
-    } catch (error: any) { 
-      console.error("Sync error:", error); 
-      addToast(error.message || 'Failed to sync with Google.', 'error'); 
+
+      addToast(`Imported ${importedCount} items from Google`, 'success');
+    } catch (error: any) {
+      console.error('Pull error:', error);
+      addToast('Failed to pull from Google', 'error');
+    } finally {
+      setIsSyncing(false);
     }
-    finally { setIsSyncing(false); }
   };
 
 
@@ -341,7 +302,7 @@ export const Dashboard: React.FC = () => {
               New Routine
             </motion.button>
             <motion.button onClick={handleCalendarSync} disabled={isSyncing} className="flex items-center gap-2 px-4 py-2 bg-app-card border border-app-border/50 rounded-xl text-sm font-medium hover:bg-app-surface transition-colors" whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-              <CalendarPlus className="w-4 h-4" />{isSyncing ? 'Syncing...' : 'Sync Google Tasks'}
+              <CalendarPlus className="w-4 h-4" />{isSyncing ? 'Pulling...' : 'Pull from Google'}
             </motion.button>
           </div>
         </div>
