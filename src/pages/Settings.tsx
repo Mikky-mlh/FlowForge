@@ -84,10 +84,6 @@ export const Settings: React.FC = () => {
       setIsPulling(false);
     }
   };
-  const [isPulling, setIsPulling] = useState(false);
-
-
-
 
   const handleColorChange = (key: keyof typeof theme, value: string) => {
     updateTheme({ [key]: value });
