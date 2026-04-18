@@ -16,7 +16,7 @@ export const googleProvider = new GoogleAuthProvider();
 
 // Add calendar and tasks scopes for sync
 googleProvider.addScope('https://www.googleapis.com/auth/calendar.events');
-googleProvider.addScope('https://www.googleapis.com/auth/tasks.readonly');
+googleProvider.addScope('https://www.googleapis.com/auth/tasks');
 
 // Force consent screen so users can check the permission boxes
 googleProvider.setCustomParameters({
