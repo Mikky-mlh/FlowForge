@@ -7,50 +7,60 @@ import { Attachment } from '../lib/storage';
 import { scheduleTaskNotification, scheduleRoutineNotification, cancelNotification, restoreNotifications } from '../lib/notificationScheduler';
 import { recordCompletion } from '../lib/habitTracking';
 
-// Helper function to sync task updates to Google Calendar
-const syncTaskToGoogleCalendar = async (task: TodoTask) => {
+// Helper function to sync task updates to Google Tasks
+const syncTaskToGoogleTasks = async (task: TodoTask) => {
   try {
     const token = localStorage.getItem('flowforge_google_token');
-    if (!token || !task.calendarEventId || !task.dueDate) return;
+    if (!token) {
+      console.log('No Google token available for sync');
+      return;
+    }
+    if (!task.googleTaskId || !task.googleTaskListId) {
+      console.log('Task has no googleTaskId, skipping sync');
+      return;
+    }
     
-    const start = new Date(task.dueDate);
-    const durationMinutes = task.duration || 60;
-    const end = new Date(start.getTime() + durationMinutes * 60000);
-    
-    const summary = task.status === 'done' ? `✅ ${task.title}` : task.title;
-    
-    const event = {
-      summary,
-      description: task.description || '',
-      start: { dateTime: start.toISOString() },
-      end: { dateTime: end.toISOString() },
+    const gTask = {
+      title: task.title,
+      notes: task.description || '',
+      status: task.status === 'done' ? 'completed' : 'needsAction',
+      due: task.dueDate || undefined,
     };
     
-    await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${task.calendarEventId}`, {
+    console.log('Syncing task to Google Tasks:', task.title, 'Status:', task.status);
+    
+    const response = await fetch(`https://tasks.googleapis.com/tasks/v1/lists/${task.googleTaskListId}/tasks/${task.googleTaskId}`, {
       method: 'PUT',
       headers: { 
         'Authorization': `Bearer ${token}`, 
         'Content-Type': 'application/json' 
       },
-      body: JSON.stringify(event)
+      body: JSON.stringify(gTask)
     });
+    
+    if (response.ok) {
+      console.log('Successfully synced task to Google Tasks');
+    } else {
+      const errorText = await response.text();
+      console.error('Failed to sync to Google Tasks:', response.status, errorText);
+    }
   } catch (error) {
-    console.error('Failed to sync task to Google Calendar:', error);
+    console.error('Failed to sync task to Google Tasks:', error);
   }
 };
 
-// Helper function to delete event from Google Calendar
-const deleteFromGoogleCalendar = async (calendarEventId: string) => {
+// Helper function to delete from Google Tasks
+const deleteFromGoogleTasks = async (googleTaskId: string, googleTaskListId: string) => {
   try {
     const token = localStorage.getItem('flowforge_google_token');
     if (!token) return;
     
-    await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${calendarEventId}`, {
+    await fetch(`https://tasks.googleapis.com/tasks/v1/lists/${googleTaskListId}/tasks/${googleTaskId}`, {
       method: 'DELETE',
       headers: { 'Authorization': `Bearer ${token}` }
     });
   } catch (error) {
-    console.error('Failed to delete event from Google Calendar:', error);
+    console.error('Failed to delete from Google Tasks:', error);
   }
 };
 
@@ -325,9 +335,9 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
     
-    // Sync to Google Calendar if task has calendarEventId
-    if (currentTask && isTodoTask(currentTask) && currentTask.calendarEventId) {
-      syncTaskToGoogleCalendar(updatedTask as TodoTask);
+    // Sync to Google Tasks if task has googleTaskId
+    if (isTodoTask(updatedTask) && updatedTask.googleTaskId && updatedTask.googleTaskListId) {
+      syncTaskToGoogleTasks(updatedTask);
     }
     
     if (isOnline) {
@@ -387,9 +397,9 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setTasks(prev => prev.filter(t => t.id !== id));
     cancelNotification(id);
     
-    // Delete from Google Calendar if it has a calendarEventId
-    if (taskToDelete && isTodoTask(taskToDelete) && taskToDelete.calendarEventId) {
-      deleteFromGoogleCalendar(taskToDelete.calendarEventId);
+    // Delete from Google Tasks if it has googleTaskId
+    if (taskToDelete && isTodoTask(taskToDelete) && taskToDelete.googleTaskId && taskToDelete.googleTaskListId) {
+      deleteFromGoogleTasks(taskToDelete.googleTaskId, taskToDelete.googleTaskListId);
     }
     
     if (isOnline) {

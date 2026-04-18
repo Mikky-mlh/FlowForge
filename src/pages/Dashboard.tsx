@@ -202,35 +202,44 @@ export const Dashboard: React.FC = () => {
     
     setIsSyncing(true);
     try {
-      // Step 1: Import events from Google Calendar
-      const now = new Date();
-      const timeMin = now.toISOString();
-      const timeMax = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
+      // Step 1: Get Google Tasks list
+      const listsRes = await fetch('https://tasks.googleapis.com/tasks/v1/users/@me/lists', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
       
-      const fetchResponse = await fetch(
-        `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${timeMin}&timeMax=${timeMax}&singleEvents=true&orderBy=startTime`,
-        { headers: { 'Authorization': `Bearer ${token}` } }
-      );
+      let taskListId = '';
+      if (listsRes.ok) {
+        const listsData = await listsRes.json();
+        taskListId = listsData.items?.[0]?.id || '';
+      }
+      
+      if (!taskListId) {
+        throw new Error('No Google Tasks list found');
+      }
+      
+      // Step 2: Import from Google Tasks
+      const tasksRes = await fetch(`https://tasks.googleapis.com/tasks/v1/lists/${taskListId}/tasks`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
       
       let importCount = 0;
-      if (fetchResponse.ok) {
-        const data = await fetchResponse.json();
+      if (tasksRes.ok) {
+        const tasksData = await tasksRes.json();
         
-        for (const event of data.items || []) {
-          if (event.summary && event.start?.dateTime) {
-            const existingTask = tasks.find(t => isTodoTask(t) && t.calendarEventId === event.id);
+        for (const gTask of tasksData.items || []) {
+          if (gTask.title) {
+            const existingTask = tasks.find(t => isTodoTask(t) && t.googleTaskId === gTask.id);
             if (!existingTask) {
-              // Import new event from calendar
               const newTask: TodoTask = {
                 id: crypto.randomUUID(),
                 type: 'task',
-                title: event.summary,
-                description: event.description || undefined,
-                dueDate: event.start.dateTime,
-                duration: event.end?.dateTime ? Math.round((new Date(event.end.dateTime).getTime() - new Date(event.start.dateTime).getTime()) / 60000) : 60,
-                status: 'todo',
+                title: gTask.title,
+                description: gTask.notes || undefined,
+                dueDate: gTask.due || undefined,
+                status: gTask.status === 'completed' ? 'done' : 'todo',
                 priority: 'medium',
-                calendarEventId: event.id,
+                googleTaskId: gTask.id,
+                googleTaskListId: taskListId,
                 tags: [],
                 syncId: syncId,
                 createdAt: Date.now(),
@@ -241,51 +250,42 @@ export const Dashboard: React.FC = () => {
             }
           }
         }
-      } else {
-        const errorText = await fetchResponse.text();
-        console.error('Failed to fetch calendar events:', errorText);
-        throw new Error('Failed to fetch calendar events');
       }
 
-      // Step 2: Export tasks to Google Calendar (only new tasks without calendarEventId)
-      const tasksToExport = tasks.filter(t => isTodoTask(t) && t.dueDate && !t.calendarEventId);
+      // Step 3: Export tasks to Google Tasks (not Calendar)
+      const tasksToExport = tasks.filter(t => isTodoTask(t) && !t.googleTaskId);
       let exportCount = 0;
       
       for (const task of tasksToExport) {
         if (!isTodoTask(task)) continue;
         
-        const start = new Date(task.dueDate!);
-        const durationMinutes = task.duration || 60;
-        const end = new Date(start.getTime() + durationMinutes * 60000);
-        
-        const event = { 
-          summary: task.status === 'done' ? `✅ ${task.title}` : task.title,
-          description: task.description || '', 
-          start: { dateTime: start.toISOString() }, 
-          end: { dateTime: end.toISOString() } 
+        const gTask = {
+          title: task.title,
+          notes: task.description || '',
+          status: task.status === 'done' ? 'completed' : 'needsAction',
+          due: task.dueDate || undefined,
         };
         
-        const response = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', { 
+        const response = await fetch(`https://tasks.googleapis.com/tasks/v1/lists/${taskListId}/tasks`, { 
           method: 'POST', 
           headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, 
-          body: JSON.stringify(event) 
+          body: JSON.stringify(gTask) 
         });
         
         if (response.ok) { 
           const data = await response.json(); 
-          // Update task with calendar event ID WITHOUT triggering re-render issues
-          await updateTask(task.id, { calendarEventId: data.id }); 
+          await updateTask(task.id, { googleTaskId: data.id, googleTaskListId: taskListId }); 
           exportCount++;
         } else {
           const errorText = await response.text();
-          console.error('Failed to create calendar event:', errorText);
+          console.error('Failed to create Google Task:', errorText);
         }
       }
       
-      addToast(`Synced! Imported ${importCount} event(s), exported ${exportCount} task(s).`, 'success');
+      addToast(`Synced! Imported ${importCount} task(s), exported ${exportCount} task(s) to Google Tasks.`, 'success');
     } catch (error: any) { 
-      console.error("Calendar sync error:", error); 
-      addToast(error.message || 'Failed to sync with Google Calendar.', 'error'); 
+      console.error("Sync error:", error); 
+      addToast(error.message || 'Failed to sync with Google.', 'error'); 
     }
     finally { setIsSyncing(false); }
   };
@@ -337,7 +337,7 @@ export const Dashboard: React.FC = () => {
               New Routine
             </motion.button>
             <motion.button onClick={handleCalendarSync} disabled={isSyncing} className="flex items-center gap-2 px-4 py-2 bg-app-card border border-app-border/50 rounded-xl text-sm font-medium hover:bg-app-surface transition-colors" whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-              <CalendarPlus className="w-4 h-4" />{isSyncing ? 'Syncing...' : 'Sync Calendar'}
+              <CalendarPlus className="w-4 h-4" />{isSyncing ? 'Syncing...' : 'Sync Google Tasks'}
             </motion.button>
           </div>
         </div>

@@ -1,5 +1,57 @@
-import { Task } from '../contexts/TaskContext';
+import { Task, TodoTask, isTodoTask } from '../contexts/TaskContext';
 
+// Export task to Google Tasks (not Calendar)
+export const exportToGoogleTasks = async (task: TodoTask, token: string, taskListId: string): Promise<string | null> => {
+  const gTask = {
+    title: task.title,
+    notes: task.description || '',
+    status: task.status === 'done' ? 'completed' : 'needsAction',
+    due: task.dueDate ? new Date(task.dueDate).toISOString() : undefined,
+  };
+
+  try {
+    const method = task.googleTaskId ? 'PUT' : 'POST';
+    const url = task.googleTaskId
+      ? `https://tasks.googleapis.com/tasks/v1/lists/${taskListId}/tasks/${task.googleTaskId}`
+      : `https://tasks.googleapis.com/tasks/v1/lists/${taskListId}/tasks`;
+
+    const res = await fetch(url, {
+      method,
+      headers: { 
+        'Authorization': `Bearer ${token}`, 
+        'Content-Type': 'application/json' 
+      },
+      body: JSON.stringify(gTask)
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      return data.id;
+    } else {
+      console.error('Failed to export to Google Tasks:', await res.text());
+      return null;
+    }
+  } catch (error) {
+    console.error('Error exporting to Google Tasks:', error);
+    return null;
+  }
+};
+
+// Delete from Google Tasks
+export const deleteFromGoogleTasks = async (googleTaskId: string, taskListId: string, token: string): Promise<boolean> => {
+  try {
+    const res = await fetch(`https://tasks.googleapis.com/tasks/v1/lists/${taskListId}/tasks/${googleTaskId}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    return res.ok;
+  } catch (error) {
+    console.error('Error deleting from Google Tasks:', error);
+    return false;
+  }
+};
+
+// Sync task to Calendar (for time blocking visualization)
 export const syncTaskToCalendar = async (task: Task, token: string): Promise<string | null> => {
   if (!task.dueDate) return null;
   
@@ -44,29 +96,34 @@ export const syncTaskToCalendar = async (task: Task, token: string): Promise<str
   }
 };
 
-export const syncTaskToGoogleTask = async (task: Task, token: string): Promise<boolean> => {
-  if (!task.googleTaskId || !task.googleTaskListId) return false;
-  
-  const gTask = {
-    id: task.googleTaskId,
-    title: task.title,
-    notes: task.description || '',
-    status: task.status === 'done' ? 'completed' : 'needsAction',
-    due: task.dueDate ? new Date(task.dueDate).toISOString() : null,
-  };
-
+// Update calendar event
+export const updateCalendarEvent = async (eventId: string, updates: any, token: string): Promise<boolean> => {
   try {
-    const res = await fetch(`https://tasks.googleapis.com/tasks/v1/lists/${task.googleTaskListId}/tasks/${task.googleTaskId}`, {
-      method: 'PUT',
+    const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}`, {
+      method: 'PATCH',
       headers: { 
         'Authorization': `Bearer ${token}`, 
         'Content-Type': 'application/json' 
       },
-      body: JSON.stringify(gTask)
+      body: JSON.stringify(updates)
     });
     return res.ok;
   } catch (error) {
-    console.error('Error syncing to Google Tasks:', error);
+    console.error('Error updating calendar event:', error);
+    return false;
+  }
+};
+
+// Delete calendar event
+export const deleteCalendarEvent = async (eventId: string, token: string): Promise<boolean> => {
+  try {
+    const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    return res.ok;
+  } catch (error) {
+    console.error('Error deleting calendar event:', error);
     return false;
   }
 };
