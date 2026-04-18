@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Play, Pause, ArrowCounterClockwise, Bell, Gear, CheckCircle } from '@phosphor-icons/react';
-import toast from 'react-hot-toast';
+import { useToast } from '../contexts/ToastContext';
 
 interface TimerSettings {
   focusDuration: number;
@@ -82,6 +82,7 @@ const sendBrowserNotification = (title: string, body: string) => {
 };
 
 export const PomodoroTimer: React.FC = () => {
+  const { addToast } = useToast();
   const [settings, setSettings] = useState<TimerSettings>(() => {
     try {
       const stored = localStorage.getItem(SETTINGS_KEY);
@@ -176,7 +177,7 @@ export const PomodoroTimer: React.FC = () => {
       );
     }
     
-    toast.success(message);
+    addToast(message, 'success');
     
     const shouldAutoStart = (state.mode === 'focus' && settings.autoStartFocus) ||
                            (state.mode !== 'focus' && settings.autoStartBreak);
@@ -254,10 +255,10 @@ export const PomodoroTimer: React.FC = () => {
     const granted = await requestNotificationPermission();
     if (granted) {
       setNotificationPermission('granted');
-      toast.success('Notifications enabled');
+      addToast('Notifications enabled', 'success');
     } else {
       setNotificationPermission('denied');
-      toast.error('Notification permission denied');
+      addToast('Notification permission denied', 'error');
     }
   };
 

@@ -1,12 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useTheme, defaultTheme } from '../contexts/ThemeContext';
 import { useTasks } from '../contexts/TaskContext';
+import { useToast } from '../contexts/ToastContext';
 import { PaintBrush, Image as ImageIcon, ArrowCounterClockwise, Sun, Moon, Laptop, DownloadSimple, UploadSimple } from '@phosphor-icons/react';
 import { motion } from 'framer-motion';
 import { exportTasksAsJSON, exportTasksAsCSV, exportTasksAsMarkdown, downloadFile, readFileAsText } from '../lib/exportImport';
 import { WorkScheduleSettings } from '../components/WorkScheduleSettings';
 import { NotificationSettings } from '../components/NotificationSettings';
-import toast from 'react-hot-toast';
 
 function BentoCard({ children, className = '' }: { children: React.ReactNode; className?: string }) {
   return <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className={`bg-app-card border border-app-border/30 rounded-2xl p-6 ${className}`}>{children}</motion.div>;
@@ -15,6 +15,7 @@ function BentoCard({ children, className = '' }: { children: React.ReactNode; cl
 export const Settings: React.FC = () => {
   const { theme, updateTheme, setMode } = useTheme();
   const { tasks } = useTasks();
+  const { addToast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
 
@@ -42,19 +43,19 @@ export const Settings: React.FC = () => {
   const handleExportJSON = () => {
     const json = exportTasksAsJSON(tasks);
     downloadFile(json, `flowforge-export-${new Date().toISOString().split('T')[0]}.json`, 'application/json');
-    toast.success('Exported as JSON');
+    addToast('Exported as JSON', 'success');
   };
 
   const handleExportCSV = () => {
     const csv = exportTasksAsCSV(tasks);
     downloadFile(csv, `flowforge-export-${new Date().toISOString().split('T')[0]}.csv`, 'text/csv');
-    toast.success('Exported as CSV');
+    addToast('Exported as CSV', 'success');
   };
 
   const handleExportMarkdown = () => {
     const md = exportTasksAsMarkdown(tasks);
     downloadFile(md, `flowforge-export-${new Date().toISOString().split('T')[0]}.md`, 'text/markdown');
-    toast.success('Exported as Markdown');
+    addToast('Exported as Markdown', 'success');
   };
 
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -66,13 +67,13 @@ export const Settings: React.FC = () => {
       if (file.name.endsWith('.json')) {
         const imported = JSON.parse(content);
         if (imported.tasks && Array.isArray(imported.tasks)) {
-          toast.success(`Imported ${imported.tasks.length} tasks`);
+          addToast(`Imported ${imported.tasks.length} tasks`, 'success');
         }
       } else {
-        toast.error('Unsupported file format');
+        addToast('Unsupported file format', 'error');
       }
     } catch (error) {
-      toast.error('Failed to import file');
+      addToast('Failed to import file', 'error');
     }
     
     if (fileInputRef.current) fileInputRef.current.value = '';
