@@ -93,9 +93,14 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     root.style.setProperty('--app-muted', effectiveTheme.appMuted);
     root.style.setProperty('--app-surface', effectiveTheme.appSurface);
     if (effectiveTheme.bgImage) {
+      console.log('Setting background image:', effectiveTheme.bgImage.substring(0, 50) + '...');
       root.style.setProperty('--app-bg-image', `url(${effectiveTheme.bgImage})`);
+      document.body.style.backgroundImage = `url(${effectiveTheme.bgImage})`;
+      document.body.setAttribute('data-has-bg', 'true');
     } else {
       root.style.setProperty('--app-bg-image', 'none');
+      document.body.style.backgroundImage = 'none';
+      document.body.removeAttribute('data-has-bg');
     }
     
     // Apply dark class for system styles

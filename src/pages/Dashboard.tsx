@@ -13,7 +13,7 @@ import { InfoCard } from '../components/InfoCard';
 import { CreateTaskModal } from '../components/CreateTaskModal';
 import { CreateRoutineModal } from '../components/CreateRoutineModal';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
-import { CheckCircle, Circle, CalendarBlank, Tag, MagnifyingGlass, SortAscending, Funnel, CalendarPlus, List, Clock, Square, CheckSquare, Plus } from '@phosphor-icons/react';
+import { CheckCircle, Circle, CalendarBlank, Tag, MagnifyingGlass, SortAscending, Funnel, List, Clock, Square, CheckSquare, Plus } from '@phosphor-icons/react';
 import { format, isSameDay } from 'date-fns';
 
 const TAG_COLORS = [
@@ -141,10 +141,9 @@ function ScoreRing({ score }: { score: number }) {
 
 export const Dashboard: React.FC = () => {
   const { tasks, updateTask, deleteTask, isOnline, hasMore, loadMore, isLoadingMore, addTask } = useTasks();
-  const { getValidGoogleToken, signIn, syncId } = useAuth();
+  const { syncId } = useAuth();
   const { addToast } = useToast();
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-  const [isSyncing, setIsSyncing] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'timeline'>('list');
   const [searchQuery, setSearchQuery] = useState('');
   const [filterTag, setFilterTag] = useState<string | null>(null);
@@ -187,75 +186,6 @@ export const Dashboard: React.FC = () => {
     const now = new Date(); const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime(); const startOfWeek = startOfToday - (now.getDay() * 24 * 60 * 60 * 1000);
     return { completedToday: tasks.filter(t => t.status === 'done' && t.completedAt && t.completedAt >= startOfToday).length, completedThisWeek: tasks.filter(t => t.status === 'done' && t.completedAt && t.completedAt >= startOfWeek).length, createdThisWeek: tasks.filter(t => t.createdAt >= startOfWeek).length };
   }, [tasks]);
-
-  const handleCalendarSync = async () => {
-    let token = await getValidGoogleToken();
-    if (!token) {
-      token = await signIn(true);
-      if (!token) return;
-    }
-    
-    if (!syncId) {
-      addToast('Sync ID not available', 'error');
-      return;
-    }
-    
-    setIsSyncing(true);
-    try {
-      const { fetchGoogleTasks, fetchGoogleCalendarEvents } = await import('../lib/googleApi');
-      
-      const { tasks: gTasks } = await fetchGoogleTasks(token);
-      const calendarEvents = await fetchGoogleCalendarEvents(token);
-      let importedCount = 0;
-
-      for (const gTask of gTasks) {
-        const exists = tasks.some(t => isTodoTask(t) && t.googleTaskId === gTask.id);
-        if (!exists) {
-          await addTask({
-            type: 'task',
-            title: gTask.title || 'Untitled Task',
-            description: gTask.notes || '',
-            priority: 'medium',
-            status: gTask.status === 'completed' ? 'done' : 'todo',
-            tags: ['imported-from-google'],
-            dueDate: gTask.due || undefined,
-            googleTaskId: gTask.id,
-          });
-          importedCount++;
-        }
-      }
-
-      for (const event of calendarEvents) {
-        if (!event.start?.dateTime) continue;
-        const exists = tasks.some(t => t.calendarEventId === event.id);
-        if (!exists) {
-          const startDate = new Date(event.start.dateTime);
-          const scheduleTime = `${String(startDate.getHours()).padStart(2, '0')}:${String(startDate.getMinutes()).padStart(2, '0')}`;
-          await addTask({
-            type: 'routine',
-            title: event.summary || 'Untitled Event',
-            description: event.description || '',
-            priority: 'medium',
-            status: 'todo',
-            tags: ['imported-from-calendar'],
-            scheduleTime,
-            routineType: 'all',
-            calendarEventId: event.id,
-          });
-          importedCount++;
-        }
-      }
-
-      addToast(`Imported ${importedCount} items from Google`, 'success');
-    } catch (error: any) {
-      console.error('Pull error:', error);
-      addToast('Failed to pull from Google', 'error');
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
-
 
   return (
     <div className="p-6 md:p-10 max-w-7xl mx-auto min-h-[100dvh]">
@@ -354,19 +284,7 @@ export const Dashboard: React.FC = () => {
         <div className="space-y-8">
           {/* Task List */}
           <section>
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="text-xs uppercase tracking-[0.15em] font-semibold text-app-muted/60">Today's Priorities</h2>
-              <motion.button 
-                onClick={handleCalendarSync} 
-                disabled={isSyncing} 
-                className="flex items-center gap-2 px-3 py-1.5 bg-app-primary/10 text-app-primary rounded-lg text-xs font-medium hover:bg-app-primary/20 transition-colors disabled:opacity-50" 
-                whileHover={{ scale: 1.02 }} 
-                whileTap={{ scale: 0.98 }}
-              >
-                <CalendarPlus className="w-3.5 h-3.5" />
-                {isSyncing ? 'Pulling...' : 'Pull from Google'}
-              </motion.button>
-            </div>
+            <h2 className="text-xs uppercase tracking-[0.15em] font-semibold text-app-muted/60 mb-5">Today's Priorities</h2>
             {incompleteTasks.length === 0 ? (
               <BentoCard><div className="py-16 text-center text-app-muted">No pending tasks found.</div></BentoCard>
             ) : (

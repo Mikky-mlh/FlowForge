@@ -27,7 +27,13 @@ export const Settings: React.FC = () => {
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
-        updateTheme({ bgImage: reader.result as string });
+        const imageData = reader.result as string;
+        console.log('Image uploaded, size:', imageData.length);
+        updateTheme({ bgImage: imageData });
+        addToast('Background image uploaded!', 'success');
+      };
+      reader.onerror = () => {
+        addToast('Failed to upload image', 'error');
       };
       reader.readAsDataURL(file);
     }

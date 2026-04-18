@@ -82,16 +82,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return unsubscribe;
   }, []);
 
-  const signIn = async (requestCalendarScope: boolean = true): Promise<string | null> => {
+  const signIn = async (requestCalendarScope: boolean = false): Promise<string | null> => {
     setError(null);
     try {
-      // Add calendar and tasks scopes to the provider if requested
-      if (requestCalendarScope) {
-        googleProvider.addScope('https://www.googleapis.com/auth/calendar');
-        googleProvider.addScope('https://www.googleapis.com/auth/calendar.events');
-        googleProvider.addScope('https://www.googleapis.com/auth/tasks');
-      }
-      
       const result = await signInWithPopup(auth, googleProvider);
       const credential = GoogleAuthProvider.credentialFromResult(result);
       if (credential?.accessToken) {

@@ -89,5 +89,10 @@ service cloud.firestore {
                        request.resource.data.date is string;
       allow delete: if resource.data.syncId is string;
     }
+
+    match /settings/{syncId} {
+      allow read: if true;
+      allow write: if true;
+    }
   }
 }
