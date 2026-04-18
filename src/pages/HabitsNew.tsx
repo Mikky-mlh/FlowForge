@@ -6,7 +6,8 @@ import { CheckCircle, Circle, Flame, Calendar, TrendUp } from '@phosphor-icons/r
 import { format, startOfWeek, endOfWeek, eachDayOfInterval } from 'date-fns';
 import { InfoCard } from '../components/InfoCard';
 import { useTasks, isRoutine } from '../contexts/TaskContext';
-import { getHabitStats, getWeeklyProgress, getAllHabitStats } from '../lib/habitTracking';
+import { useAuth } from '../contexts/AuthContext';
+import { getHabitStats, getWeeklyProgress } from '../lib/habitTrackingFirestore';
 
 function BentoCard({ children, className = '' }: { children: React.ReactNode; className?: string }) {
   return <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className={`bg-app-card border border-app-border/30 rounded-2xl ${className}`}>{children}</motion.div>;
@@ -27,8 +28,36 @@ function StatCard({ icon: Icon, label, value, sublabel, delay, color }: { icon: 
 
 export const HabitsPage: React.FC = () => {
   const { tasks, updateTask } = useTasks();
+  const { syncId } = useAuth();
   const routines = useMemo(() => tasks.filter(isRoutine), [tasks]);
-  const habitStatsMap = useMemo(() => getAllHabitStats(routines), [routines]);
+  const [habitStatsMap, setHabitStatsMap] = React.useState<Map<string, any>>(new Map());
+  const [weeklyProgressMap, setWeeklyProgressMap] = React.useState<Map<string, boolean[]>>(new Map());
+
+  // Load habit stats from Firestore
+  React.useEffect(() => {
+    if (!syncId) return;
+    
+    const loadStats = async () => {
+      const statsMap = new Map();
+      const progressMap = new Map();
+      
+      for (const routine of routines) {
+        try {
+          const stats = await getHabitStats(routine, syncId);
+          const progress = await getWeeklyProgress(routine, syncId);
+          statsMap.set(routine.id, stats);
+          progressMap.set(routine.id, progress);
+        } catch (error) {
+          console.error('Failed to load habit stats:', error);
+        }
+      }
+      
+      setHabitStatsMap(statsMap);
+      setWeeklyProgressMap(progressMap);
+    };
+    
+    loadStats();
+  }, [routines, syncId]);
 
   const weekStart = startOfWeek(new Date());
   const weekEnd = endOfWeek(new Date());
@@ -86,7 +115,7 @@ export const HabitsPage: React.FC = () => {
           <div className="divide-y divide-app-border/30">
             {routines.map((routine, idx) => {
               const stats = habitStatsMap.get(routine.id);
-              const weekProgress = getWeeklyProgress(routine);
+              const weekProgress = weeklyProgressMap.get(routine.id) || [false, false, false, false, false, false, false];
               
               return (
                 <motion.div key={routine.id} className="grid grid-cols-8 items-center py-4" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.05 }}>

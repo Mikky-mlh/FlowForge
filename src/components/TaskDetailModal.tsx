@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Task, useTasks } from '../contexts/TaskContext';
+import { Task, useTasks, isTodoTask } from '../contexts/TaskContext';
 import { useAuth } from '../contexts/AuthContext';
 import { X, Plus, CheckCircle, Trash, CalendarBlank, Clock, Paperclip, Eye, DownloadSimple } from '@phosphor-icons/react';
 import { uploadAttachment, formatFileSize, isImageFile, Attachment } from '../lib/storage';
@@ -31,18 +31,8 @@ export const TaskDetailModal: React.FC<Props> = ({ task, onClose }) => {
     return '09:00';
   });
 
-  // Auto-sync changes to Google Calendar / Tasks
-  useEffect(() => {
-    if (!googleAccessToken) return;
-    if (!task.calendarEventId && !task.googleTaskId) return;
-
-    const timer = setTimeout(() => {
-      if (task.calendarEventId) syncTaskToCalendar(task, googleAccessToken);
-      if (task.googleTaskId) syncTaskToGoogleTask(task, googleAccessToken);
-    }, 1500); // Debounce for 1.5s after user stops typing
-
-    return () => clearTimeout(timer);
-  }, [task, googleAccessToken]);
+  // Auto-sync is handled by TaskContext automatically
+  // No need for manual debouncing here
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
