@@ -4,6 +4,7 @@ import React, { useState, useMemo, useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useTasks, Task, TodoTask, isTodoTask } from '../contexts/TaskContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../contexts/ToastContext';
 import { doc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { QuickAdd } from '../components/QuickAdd';
@@ -141,6 +142,7 @@ function ScoreRing({ score }: { score: number }) {
 export const Dashboard: React.FC = () => {
   const { tasks, updateTask, deleteTask, isOnline, hasMore, loadMore, isLoadingMore, addTask } = useTasks();
   const { getValidGoogleToken, signIn, syncId } = useAuth();
+  const { addToast } = useToast();
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'timeline'>('list');
@@ -194,7 +196,7 @@ export const Dashboard: React.FC = () => {
     }
     
     if (!syncId) {
-      alert('Sync ID not available');
+      addToast('Sync ID not available', 'error');
       return;
     }
     
@@ -279,10 +281,10 @@ export const Dashboard: React.FC = () => {
         exportCount += results.filter(r => r !== null).length;
       }
       
-      alert(`Synced! Imported ${importCount} event(s) from calendar, exported ${exportCount} task(s) to calendar.`);
+      addToast(`Synced! Imported ${importCount} event(s) from calendar, exported ${exportCount} task(s) to calendar.`, 'success');
     } catch (error) { 
       console.error("Calendar sync error:", error); 
-      alert("Failed to sync with Google Calendar."); 
+      addToast('Failed to sync with Google Calendar.', 'error'); 
     }
     finally { setIsSyncing(false); }
   };

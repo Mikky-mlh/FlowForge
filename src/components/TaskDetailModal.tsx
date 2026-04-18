@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { X, Plus, CheckCircle, Trash, CalendarBlank, Clock, Paperclip, Eye, DownloadSimple } from '@phosphor-icons/react';
 import { syncTaskToCalendar, syncTaskToGoogleTask } from '../lib/googleApi';
 import { uploadAttachment, formatFileSize, isImageFile, Attachment } from '../lib/storage';
+import { useToast } from '../contexts/ToastContext';
 
 interface Props {
   task: Task;
@@ -14,6 +15,7 @@ interface Props {
 export const TaskDetailModal: React.FC<Props> = ({ task, onClose }) => {
   const { tasks, updateTask, deleteTask } = useTasks();
   const { googleAccessToken, syncId } = useAuth();
+  const { addToast } = useToast();
   const [newSubtask, setNewSubtask] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
   const [dependentTasksToPrompt, setDependentTasksToPrompt] = useState<Task[] | null>(null);
@@ -110,32 +112,32 @@ export const TaskDetailModal: React.FC<Props> = ({ task, onClose }) => {
 
   const handleSyncToCalendar = async () => {
     if (!googleAccessToken) {
-      alert("Please sign in with Google to sync to Calendar.");
+      addToast('Please sign in with Google to sync to Calendar.', 'error');
       return;
     }
     const eventId = await syncTaskToCalendar(task, googleAccessToken);
     if (eventId) {
       updateTask(task.id, { calendarEventId: eventId });
-      alert("Synced to Google Calendar!");
+      addToast('Synced to Google Calendar!', 'success');
     } else {
-      alert("Failed to sync to Calendar.");
+      addToast('Failed to sync to Calendar.', 'error');
     }
   };
 
   const handleSyncToTasks = async () => {
     if (!googleAccessToken) {
-      alert("Please sign in with Google to sync to Tasks.");
+      addToast('Please sign in with Google to sync to Tasks.', 'error');
       return;
     }
     if (!task.googleTaskId) {
-      alert("This task wasn't imported from Google Tasks, so it can't be synced back yet.");
+      addToast("This task wasn't imported from Google Tasks, so it can't be synced back yet.", 'error');
       return;
     }
     const success = await syncTaskToGoogleTask(task, googleAccessToken);
     if (success) {
-      alert("Synced to Google Tasks!");
+      addToast('Synced to Google Tasks!', 'success');
     } else {
-      alert("Failed to sync to Tasks.");
+      addToast('Failed to sync to Tasks.', 'error');
     }
   };
 

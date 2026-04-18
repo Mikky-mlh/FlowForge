@@ -2,12 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { Bell, BellSlash, Clock, Repeat } from '@phosphor-icons/react';
 import { useTasks } from '../contexts/TaskContext';
 import { restoreNotifications, getNotificationSettings, saveNotificationSettings, NotificationSettings as NotifSettings } from '../lib/notificationScheduler';
+import { useToast } from '../contexts/ToastContext';
 
 export const NotificationSettings: React.FC = () => {
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [permission, setPermission] = useState<NotificationPermission>('default');
   const [settings, setSettings] = useState<NotifSettings>(getNotificationSettings());
   const { tasks } = useTasks();
+  const { addToast } = useToast();
 
   useEffect(() => {
     if ('Notification' in window) {
@@ -19,12 +21,12 @@ export const NotificationSettings: React.FC = () => {
 
   const handleToggle = async () => {
     if (!('Notification' in window)) {
-      alert('This browser does not support notifications');
+      addToast('This browser does not support notifications', 'error');
       return;
     }
 
     if (Notification.permission === 'denied') {
-      alert('Notifications are blocked. Please enable them in your browser settings.');
+      addToast('Notifications are blocked. Please enable them in your browser settings.', 'error');
       return;
     }
 
