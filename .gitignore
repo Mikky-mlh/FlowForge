@@ -7,3 +7,6 @@ coverage/
 .env*
 !.env.example
 .planning/
+
+# Android - Not needed (using PWABuilder)
+android/

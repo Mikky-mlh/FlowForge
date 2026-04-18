@@ -12,19 +12,27 @@ export default defineConfig(({mode}) => {
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
-        includeAssets: ['icon-192.svg', 'favicon.ico'],
-        manifest: false,
+        includeAssets: ['icon-192.png', 'icon-512.png', 'icon-192.svg', 'favicon.ico'],
+        manifest: false, // Using public/manifest.json instead
+        devOptions: {
+          enabled: true,
+          type: 'module'
+        },
         workbox: {
-          globPatterns: ['**/*.{js,css,html,ico,svg,woff2}'],
+          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
           navigateFallback: '/index.html',
           navigateFallbackDenylist: [/^\/api/],
+          cleanupOutdatedCaches: true,
+          clientsClaim: true,
+          skipWaiting: true,
           runtimeCaching: [
             {
               urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
               handler: 'CacheFirst',
               options: {
                 cacheName: 'google-fonts-cache',
-                expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 }
+                expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 },
+                cacheableResponse: { statuses: [0, 200] }
               }
             },
             {
@@ -32,7 +40,8 @@ export default defineConfig(({mode}) => {
               handler: 'CacheFirst',
               options: {
                 cacheName: 'gstatic-fonts-cache',
-                expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 }
+                expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 },
+                cacheableResponse: { statuses: [0, 200] }
               }
             },
             {
@@ -40,7 +49,8 @@ export default defineConfig(({mode}) => {
               handler: 'NetworkFirst',
               options: {
                 cacheName: 'firebase-storage-cache',
-                expiration: { maxEntries: 50, maxAgeSeconds: 60 * 60 * 24 * 7 }
+                expiration: { maxEntries: 50, maxAgeSeconds: 60 * 60 * 24 * 7 },
+                networkTimeoutSeconds: 5
               }
             },
             {
@@ -48,7 +58,8 @@ export default defineConfig(({mode}) => {
               handler: 'NetworkFirst',
               options: {
                 cacheName: 'google-api-cache',
-                expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 }
+                expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 },
+                networkTimeoutSeconds: 5
               }
             },
             {
