@@ -21,6 +21,10 @@ export const uploadAttachment = async (
     throw new Error('File too large. Maximum size is 10MB.');
   }
   
+  if (!syncId || !taskId) {
+    throw new Error('Missing syncId or taskId');
+  }
+  
   const id = crypto.randomUUID();
   const extension = file.name.split('.').pop() || '';
   const fileName = `${id}.${extension}`;

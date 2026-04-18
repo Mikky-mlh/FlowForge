@@ -46,7 +46,12 @@ export const TaskDetailModal: React.FC<Props> = ({ task, onClose }) => {
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !syncId) return;
+    if (!file || !syncId) {
+      if (!syncId) {
+        addToast('Please sign in to upload attachments', 'error');
+      }
+      return;
+    }
 
     setIsUploading(true);
     try {
