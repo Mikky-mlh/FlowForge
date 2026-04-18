@@ -10,11 +10,17 @@ export interface Attachment {
   uploadedAt: number;
 }
 
+export const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+
 export const uploadAttachment = async (
   file: File,
   syncId: string,
   taskId: string
 ): Promise<Attachment> => {
+  if (file.size > MAX_FILE_SIZE) {
+    throw new Error('File too large. Maximum size is 10MB.');
+  }
+  
   const id = crypto.randomUUID();
   const extension = file.name.split('.').pop() || '';
   const fileName = `${id}.${extension}`;

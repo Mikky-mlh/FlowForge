@@ -347,6 +347,22 @@ export const TaskDetailModal: React.FC<Props> = ({ task, onClose }) => {
             </div>
           </div>
 
+          {isTodoTask(task) && task.totalFocusMinutes && task.totalFocusMinutes > 0 && (
+            <div>
+              <h3 className="text-xs uppercase tracking-[0.1em] font-bold text-app-muted mb-2 block">Focus Time</h3>
+              <div className="bg-app-surface border border-app-border rounded-xl px-4 py-3">
+                <p className="text-sm text-app-text font-semibold">
+                  {Math.floor(task.totalFocusMinutes / 60)}h {task.totalFocusMinutes % 60}m total
+                </p>
+                {task.lastFocusSession && (
+                  <p className="text-xs text-app-muted mt-1">
+                    Last session: {new Date(task.lastFocusSession).toLocaleString()}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-3 gap-4">
             <div>
               <h3 className="text-xs uppercase tracking-[0.1em] font-bold text-app-muted mb-2 block">Status</h3>

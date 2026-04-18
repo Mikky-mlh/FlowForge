@@ -105,6 +105,8 @@ interface TodoTask extends BaseItem {
   calendarEventId?: string;
   googleTaskId?: string;
   googleTaskListId?: string;
+  totalFocusMinutes?: number;
+  lastFocusSession?: number;
 }
 
 interface Routine extends BaseItem {

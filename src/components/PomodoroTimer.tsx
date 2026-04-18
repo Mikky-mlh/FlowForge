@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Play, Pause, ArrowCounterClockwise, Bell, Gear, CheckCircle } from '@phosphor-icons/react';
 import { useToast } from '../contexts/ToastContext';
+import { useTasks, isTodoTask } from '../contexts/TaskContext';
 
 interface TimerSettings {
   focusDuration: number;
@@ -83,6 +84,9 @@ const sendBrowserNotification = (title: string, body: string) => {
 
 export const PomodoroTimer: React.FC = () => {
   const { addToast } = useToast();
+  const { tasks, updateTask } = useTasks();
+  const incompleteTasks = tasks.filter(t => t.status !== 'done' && isTodoTask(t));
+  const [linkedTaskId, setLinkedTaskId] = useState<string>('');
   const [settings, setSettings] = useState<TimerSettings>(() => {
     try {
       const stored = localStorage.getItem(SETTINGS_KEY);
@@ -134,6 +138,16 @@ export const PomodoroTimer: React.FC = () => {
   }, [settings]);
 
   const handleTimerComplete = useCallback(() => {
+    if (state.mode === 'focus' && linkedTaskId) {
+      const focusedTask = tasks.find(t => t.id === linkedTaskId);
+      if (focusedTask && isTodoTask(focusedTask)) {
+        updateTask(linkedTaskId, {
+          totalFocusMinutes: (focusedTask.totalFocusMinutes || 0) + settings.focusDuration,
+          lastFocusSession: Date.now()
+        });
+      }
+    }
+
     setState(prev => {
       let nextMode: TimerState['mode'];
       let newSessionsCompleted = prev.sessionsCompleted;
@@ -184,7 +198,7 @@ export const PomodoroTimer: React.FC = () => {
     if (shouldAutoStart) {
       setState(prev => ({ ...prev, isActive: true }));
     }
-  }, [settings, state.mode, notificationPermission, saveState]);
+  }, [settings, state.mode, notificationPermission, saveState, linkedTaskId, tasks, updateTask]);
 
   useEffect(() => {
     if (state.isActive && state.timeLeft > 0) {
@@ -275,6 +289,17 @@ export const PomodoroTimer: React.FC = () => {
 
   return (
     <div className="flex flex-col items-center justify-center h-full max-w-md mx-auto p-6">
+      <select 
+        value={linkedTaskId} 
+        onChange={e => setLinkedTaskId(e.target.value)}
+        className="w-full bg-app-surface border border-app-border rounded-xl px-4 py-2 text-app-text outline-none mb-4 text-sm"
+      >
+        <option value="">No task linked</option>
+        {incompleteTasks.map(t => (
+          <option key={t.id} value={t.id}>{t.title}</option>
+        ))}
+      </select>
+
       <div className="flex gap-2 mb-8 p-1 bg-app-surface rounded-full border border-app-border">
         {(['focus', 'break', 'long-break'] as const).map((m) => (
           <button

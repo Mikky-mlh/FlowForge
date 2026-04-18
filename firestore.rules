@@ -53,8 +53,10 @@ service cloud.firestore {
       let validDueDate = !('dueDate' in data) || (data.dueDate is string && data.dueDate.size() <= 50);
       let validTags = !('tags' in data) || (data.tags is list && data.tags.size() <= 20);
       let validSubtasks = !('subtasks' in data) || (data.subtasks is list && data.subtasks.size() <= 50);
+      let validFocusMinutes = !('totalFocusMinutes' in data) || (data.totalFocusMinutes is number);
+      let validLastFocus = !('lastFocusSession' in data) || (data.lastFocusSession is number);
 
-      return hasRequired && hasValidTypes && validDesc && validDueDate && validTags && validSubtasks;
+      return hasRequired && hasValidTypes && validDesc && validDueDate && validTags && validSubtasks && validFocusMinutes && validLastFocus;
     }
 
     match /users/{userId} {
