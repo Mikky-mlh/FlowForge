@@ -6,6 +6,7 @@ import { addToSyncQueue, getSyncQueue, removeFromSyncQueue } from '../lib/idb';
 import { Attachment } from '../lib/storage';
 import { scheduleTaskNotification, scheduleRoutineNotification, cancelNotification, restoreNotifications } from '../lib/notificationScheduler';
 import { recordCompletion } from '../lib/habitTracking';
+import { syncTaskToCalendar, updateCalendarEvent } from '../lib/googleApi';
 
 // Helper function to sync task updates to Google Tasks
 const syncTaskToGoogleTasks = async (task: TodoTask) => {
@@ -315,6 +316,18 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
           }
         }
+        
+        // Auto-create Google Calendar event if task has dueDate and token exists
+        if (isTodoTask(newTask) && newTask.dueDate) {
+          const token = localStorage.getItem('flowforge_google_token');
+          if (token) {
+            const calendarEventId = await syncTaskToCalendar(newTask, token);
+            if (calendarEventId) {
+              await updateDoc(doc(db, 'tasks', newTask.id), { calendarEventId });
+              console.log('Auto-created calendar event:', calendarEventId);
+            }
+          }
+        }
       } catch (e) {
         console.error('Failed to create task', e);
         await addToSyncQueue('ADD', 'tasks', newTask);
@@ -386,6 +399,17 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Sync to Google Tasks if task has googleTaskId (non-blocking)
     if (isTodoTask(updatedTask) && updatedTask.googleTaskId && updatedTask.googleTaskListId) {
       syncTaskToGoogleTasks(updatedTask).catch(console.error);
+    }
+    
+    // Sync to Google Calendar when task is marked done
+    if (updates.status === 'done' && isTodoTask(updatedTask) && updatedTask.calendarEventId) {
+      const token = localStorage.getItem('flowforge_google_token');
+      if (token) {
+        updateCalendarEvent(updatedTask.calendarEventId, {
+          summary: `✅ ${updatedTask.title}`,
+          colorId: "2"
+        }, token).catch(console.error);
+      }
     }
     
     if (isOnline) {
