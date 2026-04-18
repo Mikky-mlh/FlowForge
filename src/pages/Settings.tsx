@@ -1,14 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useTheme, defaultTheme } from '../contexts/ThemeContext';
 import { useTasks } from '../contexts/TaskContext';
-import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
-import { PaintBrush, Image as ImageIcon, ArrowCounterClockwise, Sun, Moon, Laptop, DownloadSimple, UploadSimple, CloudArrowDown } from '@phosphor-icons/react';
+import { PaintBrush, Image as ImageIcon, ArrowCounterClockwise, Sun, Moon, Laptop, DownloadSimple, UploadSimple } from '@phosphor-icons/react';
 import { motion } from 'framer-motion';
 import { exportTasksAsJSON, exportTasksAsCSV, exportTasksAsMarkdown, downloadFile, readFileAsText } from '../lib/exportImport';
 import { WorkScheduleSettings } from '../components/WorkScheduleSettings';
 import { NotificationSettings } from '../components/NotificationSettings';
-import { fetchGoogleTasks, fetchGoogleCalendarEvents } from '../lib/googleApi';
 
 function BentoCard({ children, className = '' }: { children: React.ReactNode; className?: string }) {
   return <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className={`bg-app-card border border-app-border/30 rounded-2xl p-6 ${className}`}>{children}</motion.div>;
@@ -16,74 +14,9 @@ function BentoCard({ children, className = '' }: { children: React.ReactNode; cl
 
 export const Settings: React.FC = () => {
   const { theme, updateTheme, setMode } = useTheme();
-  const { tasks, addTask } = useTasks();
-  const { googleAccessToken, getValidGoogleToken, signIn } = useAuth();
+  const { tasks } = useTasks();
   const { addToast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [isPulling, setIsPulling] = useState(false);
-
-  const handlePullFromGoogle = async () => {
-    setIsPulling(true);
-    try {
-      let token = await getValidGoogleToken();
-      if (!token) {
-        token = await signIn(true);
-        if (!token) {
-          addToast('Please sign in with Google', 'error');
-          return;
-        }
-      }
-
-      const { tasks: gTasks } = await fetchGoogleTasks(token);
-      const calendarEvents = await fetchGoogleCalendarEvents(token);
-      let importedCount = 0;
-
-      for (const gTask of gTasks) {
-        const exists = tasks.some(t => t.googleTaskId === gTask.id);
-        if (!exists) {
-          await addTask({
-            type: 'task',
-            title: gTask.title || 'Untitled Task',
-            description: gTask.notes || '',
-            priority: 'medium',
-            status: gTask.status === 'completed' ? 'done' : 'todo',
-            tags: ['imported-from-google'],
-            dueDate: gTask.due || undefined,
-            googleTaskId: gTask.id,
-          });
-          importedCount++;
-        }
-      }
-
-      for (const event of calendarEvents) {
-        if (!event.start?.dateTime) continue;
-        const exists = tasks.some(t => t.calendarEventId === event.id);
-        if (!exists) {
-          const startDate = new Date(event.start.dateTime);
-          const scheduleTime = `${String(startDate.getHours()).padStart(2, '0')}:${String(startDate.getMinutes()).padStart(2, '0')}`;
-          await addTask({
-            type: 'routine',
-            title: event.summary || 'Untitled Event',
-            description: event.description || '',
-            priority: 'medium',
-            status: 'todo',
-            tags: ['imported-from-calendar'],
-            scheduleTime,
-            routineType: 'all',
-            calendarEventId: event.id,
-          });
-          importedCount++;
-        }
-      }
-
-      addToast(`Imported ${importedCount} items from Google`, 'success');
-    } catch (error) {
-      console.error('Pull error:', error);
-      addToast('Failed to pull from Google', 'error');
-    } finally {
-      setIsPulling(false);
-    }
-  };
 
   const handleColorChange = (key: keyof typeof theme, value: string) => {
     updateTheme({ [key]: value });
@@ -232,28 +165,6 @@ export const Settings: React.FC = () => {
         </div>
 
         <div className="space-y-8">
-          <BentoCard>
-            <div className="flex items-center gap-3 mb-5">
-              <div className="w-10 h-10 rounded-xl bg-app-primary/10 flex items-center justify-center text-app-primary">
-                <CloudArrowDown className="w-5 h-5" />
-              </div>
-              <h2 className="text-lg font-semibold text-app-text">Pull from Google</h2>
-            </div>
-
-            <p className="text-sm text-app-muted mb-6">
-              Import tasks from Google Tasks and events from Google Calendar as routines.
-            </p>
-
-            <button
-              onClick={handlePullFromGoogle}
-              disabled={isPulling}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-app-primary text-app-primary-fg rounded-xl hover:opacity-90 transition-opacity disabled:opacity-50"
-            >
-              <CloudArrowDown className="w-5 h-5" />
-              {isPulling ? 'Pulling...' : 'Pull from Google'}
-            </button>
-          </BentoCard>
-
           <BentoCard>
             <div className="flex items-center gap-3 mb-5">
               <div className="w-10 h-10 rounded-xl bg-app-primary/10 flex items-center justify-center text-app-primary">

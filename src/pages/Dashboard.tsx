@@ -301,9 +301,6 @@ export const Dashboard: React.FC = () => {
               <Clock className="w-5 h-5" />
               New Routine
             </motion.button>
-            <motion.button onClick={handleCalendarSync} disabled={isSyncing} className="flex items-center gap-2 px-4 py-2 bg-app-card border border-app-border/50 rounded-xl text-sm font-medium hover:bg-app-surface transition-colors" whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-              <CalendarPlus className="w-4 h-4" />{isSyncing ? 'Pulling...' : 'Pull from Google'}
-            </motion.button>
           </div>
         </div>
       </header>
@@ -357,7 +354,19 @@ export const Dashboard: React.FC = () => {
         <div className="space-y-8">
           {/* Task List */}
           <section>
-            <h2 className="text-xs uppercase tracking-[0.15em] font-semibold text-app-muted/60 mb-5">Today's Priorities</h2>
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-xs uppercase tracking-[0.15em] font-semibold text-app-muted/60">Today's Priorities</h2>
+              <motion.button 
+                onClick={handleCalendarSync} 
+                disabled={isSyncing} 
+                className="flex items-center gap-2 px-3 py-1.5 bg-app-primary/10 text-app-primary rounded-lg text-xs font-medium hover:bg-app-primary/20 transition-colors disabled:opacity-50" 
+                whileHover={{ scale: 1.02 }} 
+                whileTap={{ scale: 0.98 }}
+              >
+                <CalendarPlus className="w-3.5 h-3.5" />
+                {isSyncing ? 'Pulling...' : 'Pull from Google'}
+              </motion.button>
+            </div>
             {incompleteTasks.length === 0 ? (
               <BentoCard><div className="py-16 text-center text-app-muted">No pending tasks found.</div></BentoCard>
             ) : (
