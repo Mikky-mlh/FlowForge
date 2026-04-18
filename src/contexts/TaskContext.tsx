@@ -7,6 +7,53 @@ import { Attachment } from '../lib/storage';
 import { scheduleTaskNotification, scheduleRoutineNotification, cancelNotification, restoreNotifications } from '../lib/notificationScheduler';
 import { recordCompletion } from '../lib/habitTracking';
 
+// Helper function to sync task updates to Google Calendar
+const syncTaskToGoogleCalendar = async (task: TodoTask) => {
+  try {
+    const token = localStorage.getItem('flowforge_google_token');
+    if (!token || !task.calendarEventId || !task.dueDate) return;
+    
+    const start = new Date(task.dueDate);
+    const durationMinutes = task.duration || 60;
+    const end = new Date(start.getTime() + durationMinutes * 60000);
+    
+    const summary = task.status === 'done' ? `✅ ${task.title}` : task.title;
+    
+    const event = {
+      summary,
+      description: task.description || '',
+      start: { dateTime: start.toISOString() },
+      end: { dateTime: end.toISOString() },
+    };
+    
+    await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${task.calendarEventId}`, {
+      method: 'PUT',
+      headers: { 
+        'Authorization': `Bearer ${token}`, 
+        'Content-Type': 'application/json' 
+      },
+      body: JSON.stringify(event)
+    });
+  } catch (error) {
+    console.error('Failed to sync task to Google Calendar:', error);
+  }
+};
+
+// Helper function to delete event from Google Calendar
+const deleteFromGoogleCalendar = async (calendarEventId: string) => {
+  try {
+    const token = localStorage.getItem('flowforge_google_token');
+    if (!token) return;
+    
+    await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${calendarEventId}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+  } catch (error) {
+    console.error('Failed to delete event from Google Calendar:', error);
+  }
+};
+
 export interface Subtask {
   id: string;
   title: string;
@@ -278,6 +325,11 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
     
+    // Sync to Google Calendar if task has calendarEventId
+    if (currentTask && isTodoTask(currentTask) && currentTask.calendarEventId) {
+      syncTaskToGoogleCalendar(updatedTask as TodoTask);
+    }
+    
     if (isOnline) {
       try {
         await updateDoc(doc(db, 'tasks', id), finalUpdates);
@@ -331,8 +383,14 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const deleteTask = async (id: string) => {
+    const taskToDelete = tasks.find(t => t.id === id);
     setTasks(prev => prev.filter(t => t.id !== id));
     cancelNotification(id);
+    
+    // Delete from Google Calendar if it has a calendarEventId
+    if (taskToDelete && isTodoTask(taskToDelete) && taskToDelete.calendarEventId) {
+      deleteFromGoogleCalendar(taskToDelete.calendarEventId);
+    }
     
     if (isOnline) {
       try {

@@ -251,52 +251,58 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClos
                   {selectedDate ? selectedDate.toLocaleDateString() : 'Select date'}
                 </button>
                 {showCalendar && (
-                  <div className="absolute mt-2 bg-app-card border border-app-border rounded-xl p-4 shadow-xl z-20 w-80">
-                    <div className="flex items-center justify-between mb-4">
-                      <button type="button" onClick={() => navigateMonth('prev')} className="p-2 hover:bg-app-surface rounded-lg transition-colors">
-                        <svg className="w-5 h-5 text-app-text" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                        </svg>
-                      </button>
-                      <h3 className="text-sm font-semibold text-app-text">
-                        {calendarMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-                      </h3>
-                      <button type="button" onClick={() => navigateMonth('next')} className="p-2 hover:bg-app-surface rounded-lg transition-colors">
-                        <svg className="w-5 h-5 text-app-text" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                        </svg>
-                      </button>
-                    </div>
-                    <div className="grid grid-cols-7 gap-1 mb-2">
-                      {dayNames.map(day => (
-                        <div key={day} className="text-xs text-center text-app-muted font-medium">{day}</div>
-                      ))}
-                    </div>
-                    <div className="grid grid-cols-7 gap-1">
-                      {generateCalendarDays().map((day, idx) => (
-                        <button
-                          key={idx}
-                          type="button"
-                          onClick={() => {
-                            if (day) {
-                              setSelectedDate(day);
-                              setShowCalendar(false);
-                            }
-                          }}
-                          disabled={!day}
-                          className={`p-2 text-sm rounded-lg ${
-                            day && selectedDate && day.toDateString() === selectedDate.toDateString()
-                              ? 'bg-app-primary text-app-primary-fg'
-                              : day
-                              ? 'hover:bg-app-surface text-app-text'
-                              : 'invisible'
-                          }`}
-                        >
-                          {day?.getDate()}
+                  <>
+                    <div 
+                      className="fixed inset-0 z-40" 
+                      onClick={() => setShowCalendar(false)}
+                    />
+                    <div className="fixed mt-2 bg-app-card border border-app-border rounded-xl p-4 shadow-xl z-50 w-80 left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+                      <div className="flex items-center justify-between mb-4">
+                        <button type="button" onClick={() => navigateMonth('prev')} className="p-2 hover:bg-app-surface rounded-lg transition-colors">
+                          <svg className="w-5 h-5 text-app-text" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                          </svg>
                         </button>
-                      ))}
+                        <h3 className="text-sm font-semibold text-app-text">
+                          {calendarMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                        </h3>
+                        <button type="button" onClick={() => navigateMonth('next')} className="p-2 hover:bg-app-surface rounded-lg transition-colors">
+                          <svg className="w-5 h-5 text-app-text" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-7 gap-1 mb-2">
+                        {dayNames.map(day => (
+                          <div key={day} className="text-xs text-center text-app-muted font-medium">{day}</div>
+                        ))}
+                      </div>
+                      <div className="grid grid-cols-7 gap-1">
+                        {generateCalendarDays().map((day, idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => {
+                              if (day) {
+                                setSelectedDate(day);
+                                setShowCalendar(false);
+                              }
+                            }}
+                            disabled={!day}
+                            className={`p-2 text-sm rounded-lg ${
+                              day && selectedDate && day.toDateString() === selectedDate.toDateString()
+                                ? 'bg-app-primary text-app-primary-fg'
+                                : day
+                                ? 'hover:bg-app-surface text-app-text'
+                                : 'invisible'
+                            }`}
+                          >
+                            {day?.getDate()}
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                  </div>
+                  </>
                 )}
               </div>
               <div>

@@ -191,7 +191,7 @@ export const Dashboard: React.FC = () => {
   const handleCalendarSync = async () => {
     let token = await getValidGoogleToken();
     if (!token) {
-      token = await signIn();
+      token = await signIn(true); // Request calendar scope
       if (!token) return;
     }
     
@@ -215,18 +215,19 @@ export const Dashboard: React.FC = () => {
       let importCount = 0;
       if (fetchResponse.ok) {
         const data = await fetchResponse.json();
-        const newTasks: TodoTask[] = [];
         
         for (const event of data.items || []) {
           if (event.summary && event.start?.dateTime) {
             const existingTask = tasks.find(t => isTodoTask(t) && t.calendarEventId === event.id);
             if (!existingTask) {
+              // Import new event from calendar
               const newTask: TodoTask = {
                 id: crypto.randomUUID(),
                 type: 'task',
                 title: event.summary,
                 description: event.description || undefined,
                 dueDate: event.start.dateTime,
+                duration: event.end?.dateTime ? Math.round((new Date(event.end.dateTime).getTime() - new Date(event.start.dateTime).getTime()) / 60000) : 60,
                 status: 'todo',
                 priority: 'medium',
                 calendarEventId: event.id,
@@ -235,56 +236,56 @@ export const Dashboard: React.FC = () => {
                 createdAt: Date.now(),
                 lastModified: Date.now(),
               };
-              newTasks.push(newTask);
+              await addTask(newTask);
+              importCount++;
             }
           }
         }
-        
-        if (newTasks.length > 0) {
-          // Batch Firestore writes with concurrency limit
-          const BATCH_SIZE = 10;
-          for (let i = 0; i < newTasks.length; i += BATCH_SIZE) {
-            const batch = newTasks.slice(i, i + BATCH_SIZE);
-            await Promise.all(batch.map(t => setDoc(doc(db, 'tasks', t.id), t)));
-          }
-          importCount = newTasks.length;
-        }
+      } else {
+        const errorText = await fetchResponse.text();
+        console.error('Failed to fetch calendar events:', errorText);
+        throw new Error('Failed to fetch calendar events');
       }
 
-      // Step 2: Export tasks to Google Calendar
-      const tasksToSync = tasks.filter(t => isTodoTask(t) && t.dueDate && !t.calendarEventId && t.status !== 'done');
+      // Step 2: Export tasks to Google Calendar (only new tasks without calendarEventId)
+      const tasksToExport = tasks.filter(t => isTodoTask(t) && t.dueDate && !t.calendarEventId);
       let exportCount = 0;
       
-      const BATCH_SIZE = 10;
-      for (let i = 0; i < tasksToSync.length; i += BATCH_SIZE) {
-        const batch = tasksToSync.slice(i, i + BATCH_SIZE);
-        const results = await Promise.all(batch.map(async (task) => {
-          if (!isTodoTask(task)) return null;
-          const event = { 
-            summary: task.title, 
-            description: task.description || '', 
-            start: { dateTime: new Date(task.dueDate!).toISOString() }, 
-            end: { dateTime: new Date(new Date(task.dueDate!).getTime() + 60 * 60 * 1000).toISOString() } 
-          };
-          const response = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', { 
-            method: 'POST', 
-            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, 
-            body: JSON.stringify(event) 
-          });
-          if (response.ok) { 
-            const data = await response.json(); 
-            await updateTask(task.id, { calendarEventId: data.id }); 
-            return data.id;
-          }
-          return null;
-        }));
-        exportCount += results.filter(r => r !== null).length;
+      for (const task of tasksToExport) {
+        if (!isTodoTask(task)) continue;
+        
+        const start = new Date(task.dueDate!);
+        const durationMinutes = task.duration || 60;
+        const end = new Date(start.getTime() + durationMinutes * 60000);
+        
+        const event = { 
+          summary: task.status === 'done' ? `✅ ${task.title}` : task.title,
+          description: task.description || '', 
+          start: { dateTime: start.toISOString() }, 
+          end: { dateTime: end.toISOString() } 
+        };
+        
+        const response = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', { 
+          method: 'POST', 
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, 
+          body: JSON.stringify(event) 
+        });
+        
+        if (response.ok) { 
+          const data = await response.json(); 
+          // Update task with calendar event ID WITHOUT triggering re-render issues
+          await updateTask(task.id, { calendarEventId: data.id }); 
+          exportCount++;
+        } else {
+          const errorText = await response.text();
+          console.error('Failed to create calendar event:', errorText);
+        }
       }
       
-      addToast(`Synced! Imported ${importCount} event(s) from calendar, exported ${exportCount} task(s) to calendar.`, 'success');
-    } catch (error) { 
+      addToast(`Synced! Imported ${importCount} event(s), exported ${exportCount} task(s).`, 'success');
+    } catch (error: any) { 
       console.error("Calendar sync error:", error); 
-      addToast('Failed to sync with Google Calendar.', 'error'); 
+      addToast(error.message || 'Failed to sync with Google Calendar.', 'error'); 
     }
     finally { setIsSyncing(false); }
   };

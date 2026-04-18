@@ -12,7 +12,7 @@ interface AuthContextType {
   error: string | null;
   googleAccessToken: string | null;
   getValidGoogleToken: () => Promise<string | null>;
-  signIn: () => Promise<string | null>;
+  signIn: (requestCalendarScope?: boolean) => Promise<string | null>;
   logOut: () => Promise<void>;
   linkDevice: (code: string) => Promise<boolean>;
   deviceLinkError: string | null;
@@ -82,9 +82,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return unsubscribe;
   }, []);
 
-  const signIn = async (): Promise<string | null> => {
+  const signIn = async (requestCalendarScope: boolean = true): Promise<string | null> => {
     setError(null);
     try {
+      // Add calendar scope to the provider if requested
+      if (requestCalendarScope) {
+        googleProvider.addScope('https://www.googleapis.com/auth/calendar');
+        googleProvider.addScope('https://www.googleapis.com/auth/calendar.events');
+      }
+      
       const result = await signInWithPopup(auth, googleProvider);
       const credential = GoogleAuthProvider.credentialFromResult(result);
       if (credential?.accessToken) {

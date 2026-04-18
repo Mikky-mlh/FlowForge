@@ -6,6 +6,7 @@ import { X, Plus, CheckCircle, Trash, CalendarBlank, Clock, Paperclip, Eye, Down
 import { syncTaskToCalendar, syncTaskToGoogleTask } from '../lib/googleApi';
 import { uploadAttachment, formatFileSize, isImageFile, Attachment } from '../lib/storage';
 import { useToast } from '../contexts/ToastContext';
+import { TimePicker } from './TimePicker';
 
 interface Props {
   task: Task;
@@ -21,6 +22,15 @@ export const TaskDetailModal: React.FC<Props> = ({ task, onClose }) => {
   const [dependentTasksToPrompt, setDependentTasksToPrompt] = useState<Task[] | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [calendarMonth, setCalendarMonth] = useState(task.dueDate ? new Date(task.dueDate) : new Date());
+  const [selectedTime, setSelectedTime] = useState(() => {
+    if (task.dueDate) {
+      const date = new Date(task.dueDate);
+      return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+    }
+    return '09:00';
+  });
 
   // Auto-sync changes to Google Calendar / Tasks
   useEffect(() => {
@@ -176,28 +186,131 @@ export const TaskDetailModal: React.FC<Props> = ({ task, onClose }) => {
             <div>
               <h3 className="text-xs uppercase tracking-[0.1em] font-bold text-app-muted mb-2 block">Due Date</h3>
               <div className="relative">
-                <CalendarBlank className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-app-muted" />
-                <input 
-                  type="datetime-local" 
-                  value={task.dueDate ? new Date(new Date(task.dueDate).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : ''}
-                  onChange={(e) => updateTask(task.id, { dueDate: e.target.value ? new Date(e.target.value).toISOString() : undefined })}
-                  className="w-full bg-app-bg border border-app-border rounded-xl pl-9 pr-3 py-2 text-sm text-app-text focus:border-app-primary outline-none transition-colors"
-                />
+                <CalendarBlank className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-app-muted pointer-events-none" />
+                <button
+                  type="button"
+                  onClick={() => setShowCalendar(!showCalendar)}
+                  className="w-full bg-app-bg border border-app-border rounded-xl pl-9 pr-3 py-2 text-sm text-app-text focus:border-app-primary outline-none transition-colors text-left"
+                >
+                  {task.dueDate ? new Date(task.dueDate).toLocaleDateString() : 'Select date'}
+                </button>
+                {showCalendar && (
+                  <>
+                    <div 
+                      className="fixed inset-0 z-40" 
+                      onClick={() => setShowCalendar(false)}
+                    />
+                    <div className="fixed mt-2 bg-app-card border border-app-border rounded-xl p-4 shadow-xl z-50 w-80 left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+                      <div className="flex items-center justify-between mb-4">
+                        <button type="button" onClick={() => {
+                          const newDate = new Date(calendarMonth);
+                          newDate.setMonth(newDate.getMonth() - 1);
+                          setCalendarMonth(newDate);
+                        }} className="p-2 hover:bg-app-surface rounded-lg transition-colors">
+                          <svg className="w-5 h-5 text-app-text" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                          </svg>
+                        </button>
+                        <h3 className="text-sm font-semibold text-app-text">
+                          {calendarMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                        </h3>
+                        <button type="button" onClick={() => {
+                          const newDate = new Date(calendarMonth);
+                          newDate.setMonth(newDate.getMonth() + 1);
+                          setCalendarMonth(newDate);
+                        }} className="p-2 hover:bg-app-surface rounded-lg transition-colors">
+                          <svg className="w-5 h-5 text-app-text" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-7 gap-1 mb-2">
+                        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                          <div key={day} className="text-xs text-center text-app-muted font-medium">{day}</div>
+                        ))}
+                      </div>
+                      <div className="grid grid-cols-7 gap-1">
+                        {(() => {
+                          const year = calendarMonth.getFullYear();
+                          const month = calendarMonth.getMonth();
+                          const firstDay = new Date(year, month, 1);
+                          const lastDay = new Date(year, month + 1, 0);
+                          const days = [];
+                          
+                          for (let i = 0; i < firstDay.getDay(); i++) {
+                            days.push(null);
+                          }
+                          
+                          for (let i = 1; i <= lastDay.getDate(); i++) {
+                            days.push(new Date(year, month, i));
+                          }
+                          
+                          return days.map((day, idx) => {
+                            const currentDate = task.dueDate ? new Date(task.dueDate) : null;
+                            const isSelected = day && currentDate && day.toDateString() === currentDate.toDateString();
+                            
+                            return (
+                              <button
+                                key={idx}
+                                type="button"
+                                onClick={() => {
+                                  if (day) {
+                                    const [hours, minutes] = selectedTime.split(':');
+                                    const dateTime = new Date(day);
+                                    dateTime.setHours(parseInt(hours), parseInt(minutes));
+                                    updateTask(task.id, { dueDate: dateTime.toISOString() });
+                                    setShowCalendar(false);
+                                  }
+                                }}
+                                disabled={!day}
+                                className={`p-2 text-sm rounded-lg ${
+                                  isSelected
+                                    ? 'bg-app-primary text-app-primary-fg'
+                                    : day
+                                    ? 'hover:bg-app-surface text-app-text'
+                                    : 'invisible'
+                                }`}
+                              >
+                                {day?.getDate()}
+                              </button>
+                            );
+                          });
+                        })()}
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
             <div>
-              <h3 className="text-xs uppercase tracking-[0.1em] font-bold text-app-muted mb-2 block">Duration (mins)</h3>
-              <div className="relative">
-                <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-app-muted" />
-                <input 
-                  type="number" 
-                  min="5"
-                  step="5"
-                  value={task.duration || 60}
-                  onChange={(e) => updateTask(task.id, { duration: parseInt(e.target.value) || 60 })}
-                  className="w-full bg-app-bg border border-app-border rounded-xl pl-9 pr-3 py-2 text-sm text-app-text focus:border-app-primary outline-none transition-colors"
-                />
-              </div>
+              <h3 className="text-xs uppercase tracking-[0.1em] font-bold text-app-muted mb-2 block">Time</h3>
+              <TimePicker 
+                value={selectedTime} 
+                onChange={(newTime) => {
+                  setSelectedTime(newTime);
+                  if (task.dueDate) {
+                    const [hours, minutes] = newTime.split(':');
+                    const dateTime = new Date(task.dueDate);
+                    dateTime.setHours(parseInt(hours), parseInt(minutes));
+                    updateTask(task.id, { dueDate: dateTime.toISOString() });
+                  }
+                }} 
+              />
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-xs uppercase tracking-[0.1em] font-bold text-app-muted mb-2 block">Duration (mins)</h3>
+            <div className="relative">
+              <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-app-muted" />
+              <input 
+                type="number" 
+                min="5"
+                step="5"
+                value={task.duration || 60}
+                onChange={(e) => updateTask(task.id, { duration: parseInt(e.target.value) || 60 })}
+                className="w-full bg-app-bg border border-app-border rounded-xl pl-9 pr-3 py-2 text-sm text-app-text focus:border-app-primary outline-none transition-colors"
+              />
             </div>
           </div>
 
