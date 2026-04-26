@@ -275,16 +275,6 @@ Requires IndexedDB support (excludes private browsing in some browsers).
 
 ---
 
-## 📸 Screenshots
-
-<div align="center">
-
-*Coming soon - Add your app screenshots here!*
-
-</div>
-
----
-
 ## 🤝 Contributing
 
 Contributions are welcome! Feel free to:
